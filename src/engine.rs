@@ -86,17 +86,20 @@ impl Engine {
                     todo!("Error handling")
                 }
 
-                if let Some(clos) = &func.clos {
+                let clos_count = if let Some(clos) = &func.clos {
                     for (arg, value) in clos {
                         self.define_local(arg.clone(), value.clone());
                     }
-                }
+                    clos.len()
+                } else {
+                    0
+                };
                 
                 for (arg, value) in std::iter::zip(func.args.clone(), arg_values) {
                     self.define_local(arg, value);
                 }
                 let result = self.evaluate(&func.expr);
-                self.remove_local(args.len());
+                self.remove_local(args.len() + clos_count);
                 result
             },
             _ => todo!("Error handling")
