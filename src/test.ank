@@ -1,0 +1,5 @@
+let foo =
+    def(x) =
+        def(y) |x| = x + y
+in 
+    println(foo(6)(8))
