@@ -1,7 +1,7 @@
 use std::{rc::Rc, collections::HashMap};
 
 use crate::{
-    expr::{ApplicationExpr, Expr, FunctionExpr, LetExpr, SequenceExpr},
+    expr::{ApplicationExpr, Expr, FunctionExpr, LetExpr, SequenceExpr, MatchExpr, Pattern},
     value::{Value, FunctionValue}, global::get_global,
 };
 
@@ -41,12 +41,14 @@ impl Engine {
     pub fn evaluate(&mut self, expr: &Expr) -> Value {
         use Expr::*;
         match expr {
-            Integer(int) => Value::Integer(int.parse().unwrap()),
             Identifier(ident) => self.resolve_identifier(ident),
+            Integer(int) => Value::Integer(int.parse().unwrap()),
+            Bool(bool) => Value::Bool(*bool),
             Let(let_expr) => self.evaluate_let_expr(let_expr),
             Function(function_expr) => self.evaluate_function_expr(function_expr),
             Application(application_expr) => self.evaluate_application_expr(application_expr),
             Sequence(sequnce_expr) => self.evaluate_sequence_expr(sequnce_expr),
+            Match(match_expr) => self.evaluate_match_expr(match_expr),
             UnitValue => Value::Unit,
         }
     }
@@ -111,4 +113,35 @@ impl Engine {
         self.evaluate(lhs);
         self.evaluate(rhs)
     }
+
+    fn evaluate_match_expr(&mut self, match_expr: &MatchExpr) -> Value {
+        let MatchExpr { expr, arms } = match_expr;
+
+        let value = self.evaluate(expr);
+        for (pattern, expr) in arms {
+            if let Some(local_count) = self.fits_pattern(&value, pattern) {
+                let result = self.evaluate(expr);
+                self.remove_local(local_count);
+                return result
+            }
+        }
+
+        todo!("Error handling")
+    }
+
+    fn fits_pattern(&mut self, value: &Value, pattern: &Pattern) -> Option<usize> {
+        let mut local_count = 0;
+
+        match (value, pattern) {
+            (Value::Integer(lint), Pattern::Integer(rint)) => lint == &rint.parse::<isize>().unwrap(),
+            (Value::Bool(lbool), Pattern::Bool(rbool)) => lbool == rbool,
+            (Value::Unit, Pattern::Unit) => true,
+            (_, Pattern::Identifier(ident)) => {
+                self.define_local(ident.clone(), value.clone());
+                local_count += 1;
+                true
+            },
+            _ => false
+        }.then_some(local_count)
+    } 
 }

@@ -1,5 +1,15 @@
-let foo =
-    def(x) =>
-        def(y) |x| => x + y
+let fib = def(n) =>
+    match n
+    | 1 => 1
+    | 2 => 1
+    | n => fib(n - 1) + fib(n - 2)
 in 
-    println(foo(6)(8))
+
+let fac = def(n) => 
+    match n
+    | 0 => 1
+    | n => n * fac(n - 1) 
+in 
+    println(fib(25));
+    println(fac(10))
+

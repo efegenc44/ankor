@@ -24,6 +24,9 @@ pub enum Token {
     Klet,
     Kdef,
     Kin,
+    Kmatch,
+    Ktrue,
+    Kfalse,
 
     End,
 }
@@ -55,7 +58,16 @@ impl std::fmt::Display for Token {
             Klet => write!(f, "let"),
             Kdef => write!(f, "def"),
             Kin => write!(f, "in"),
+            Kmatch => write!(f, "match"),
+            Ktrue => write!(f, "true"),
+            Kfalse => write!(f, "false"),
             End => write!(f, "END"),
         }
+    }
+}
+
+impl std::fmt::Debug for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
     }
 }

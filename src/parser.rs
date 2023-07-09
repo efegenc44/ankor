@@ -1,5 +1,5 @@
 use crate::{
-    expr::{SequenceExpr, ApplicationExpr, Expr, FunctionExpr, LetExpr},
+    expr::{SequenceExpr, ApplicationExpr, Expr, FunctionExpr, LetExpr, MatchExpr, Pattern},
     token::Token,
 };
 
@@ -101,8 +101,11 @@ impl Parser {
         let mut expr = match self.current_token() {
             Identifier(symbol) => Expr::Identifier(symbol.clone()),
             Integer(int) => Expr::Integer(int.clone()),
+            Ktrue => Expr::Bool(true),
+            Kfalse => Expr::Bool(false),
             Klet => return Expr::Let(self.let_expr()),
             Kdef => return Expr::Function(self.function_expr()),
+            Kmatch => return Expr::Match(self.match_expr()),
             LParen => {
                 self.advance();
                 return if self.optional(RParen) {
@@ -135,7 +138,7 @@ impl Parser {
     binary_expr_precedence_level!(term,       product,    Token::Star,                               LEFT_ASSOC);
     binary_expr_precedence_level!(arithmetic, term,       Token::Plus        | Token::Minus,         LEFT_ASSOC);
     binary_expr_precedence_level!(comparison, arithmetic, Token::Less        | Token::LessEqual |
-                                                          Token::Greater     | Token:: GreaterEqual, NO_ASSOC);
+                                                          Token::Greater     | Token::GreaterEqual,  NO_ASSOC);
     binary_expr_precedence_level!(equality,   comparison, Token::DoubleEqual | Token::BangEqual,     NO_ASSOC);
     binary_expr_precedence_level!(sequence,   equality,                                              SEQUENCE);
 
@@ -165,8 +168,70 @@ impl Parser {
         FunctionExpr { args, expr, clos }
     }
 
-    pub fn expr(&mut self) -> Expr {
-        let expr = self.sequence();
+
+    fn match_expr(&mut self) -> MatchExpr {
+        use Token::*;
+
+        self.expect(Kmatch);
+        let expr = Box::new(self.expr());
+
+        let mut arms = vec![self.match_arm()];
+        while let Pipe = self.current_token() {
+            arms.push(self.match_arm())
+        } 
+
+        MatchExpr { expr, arms }
+    }
+
+    fn match_arm(&mut self) -> (Pattern, Expr) {
+        use Token::*;
+
+        self.expect(Pipe);
+        let pattern = self.pattern();
+        self.expect(FatArrow);
+        let expr = self.expr();  
+
+        (pattern, expr)
+    }
+
+    fn pattern(&mut self) -> Pattern {
+        use Token::*;
+
+        let pattern = match self.current_token() {
+            Identifier(ident) => Pattern::Identifier(ident.clone()),
+            Integer(int) => Pattern::Integer(int.clone()),
+            Ktrue => Pattern::Bool(true),
+            Kfalse => Pattern::Bool(false),
+            Minus => {
+                self.advance();
+                let Integer(int) = self.current_token() else {
+                    todo!("Error handling")
+                };
+                Pattern::Integer("-".to_string() + &int)
+            }
+            LParen => {
+                self.advance();
+                return if self.optional(RParen) {
+                    Pattern::Unit
+                } else {
+                    let pattern = self.pattern();
+                    self.expect(RParen);
+                    pattern
+                }
+            }
+            _ => todo!("Error handling")            
+        };
+        self.advance();
+
+        pattern
+    }
+
+    fn expr(&mut self) -> Expr {
+        self.sequence()
+    }
+    
+    pub fn parse(&mut self) -> Expr {
+        let expr = self.expr();
 
         if self.index != self.tokens.len() - 1 {
             todo!("Error handling")

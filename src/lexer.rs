@@ -105,6 +105,9 @@ impl Lexer {
             "let" => Klet,
             "def" => Kdef,
             "in" => Kin,
+            "match" => Kmatch,
+            "true" => Ktrue,
+            "false" => Kfalse,
             _ => Identifier(identifier),
         }
     }

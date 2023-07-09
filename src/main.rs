@@ -28,7 +28,7 @@ fn main() -> io::Result<()> {
 fn from_file(file_path: &str) -> io::Result<()> {
     let file = std::fs::read_to_string(file_path)?;
     let tokens = Lexer::new(&file).collect();
-    let astree = Parser::new(tokens).expr();
+    let astree = Parser::new(tokens).parse();
     let result = Engine::new().evaluate(&astree);
     println!("= {result}");
     Ok(())
@@ -54,7 +54,7 @@ fn repl() -> io::Result<()> {
         }
 
         let tokens = Lexer::new(input).collect();
-        let astree = Parser::new(tokens).expr();
+        let astree = Parser::new(tokens).parse();
         let result = engine.evaluate(&astree);
 
         println!("= {result}");

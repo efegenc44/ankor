@@ -1,11 +1,13 @@
 #[derive(Clone)]
 pub enum Expr {
     Integer(String),
+    Bool(bool),
     Identifier(String),
     Let(LetExpr),
     Function(FunctionExpr),
     Application(ApplicationExpr),
     Sequence(SequenceExpr),
+    Match(MatchExpr),
     UnitValue
 }
 
@@ -33,4 +35,18 @@ pub struct ApplicationExpr {
 pub struct SequenceExpr {
     pub lhs: Box<Expr>,
     pub rhs: Box<Expr>,
+}
+
+#[derive(Clone)]
+pub struct MatchExpr {
+    pub expr: Box<Expr>,
+    pub arms: Vec<(Pattern, Expr)>
+}
+
+#[derive(Clone)]
+pub enum Pattern {
+    Identifier(String),
+    Integer(String),    
+    Bool(bool),
+    Unit
 }
