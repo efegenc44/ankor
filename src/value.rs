@@ -1,11 +1,15 @@
-use std::rc::Rc;
+
+use std::{rc::Rc, collections::HashMap, cell::RefCell};
 
 use crate::expr::Expr;
+
+pub type Module = Rc<RefCell<HashMap<String, Value>>>;
 
 pub struct FunctionValue {
     pub args: Vec<String>,
     pub expr: Box<Expr>,
-    pub clos: Option<Vec<(String, Value)>>
+    pub clos: Option<Vec<(String, Value)>>,
+    pub modl: Module
 }
 
 #[derive(Clone)]
@@ -14,6 +18,7 @@ pub enum Value {
     Bool(bool),
     Function(Rc<FunctionValue>),
     Native(fn(&[Value]) -> Value),
+    Module(Module),
     Unit
 }
 
@@ -42,8 +47,15 @@ impl std::fmt::Display for Value {
             Bool(bool) => write!(f, "{bool}"),
             Function(_) => write!(f, "<function>"),
             Native(_) => write!(f, "<native function>"),
+            Module(_) => write!(f, "<module>"),
             Unit => write!(f, "()"),
         }
+    }
+}
+
+impl std::fmt::Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
     }
 }
 
@@ -56,6 +68,7 @@ impl std::cmp::PartialEq for Value {
             (Bool(lbool), Bool(rbool)) => lbool == rbool,
             (Function(_), Function(_)) => false,
             (Native(_), Native(_)) => false,
+            (Module(_), Module(_)) => false,
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }
     }

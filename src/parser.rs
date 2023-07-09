@@ -1,5 +1,5 @@
 use crate::{
-    expr::{SequenceExpr, ApplicationExpr, Expr, FunctionExpr, LetExpr, MatchExpr, Pattern},
+    expr::{SequenceExpr, ApplicationExpr, Expr, FunctionExpr, LetExpr, MatchExpr, Pattern, ImportExpr, AccessExpr},
     token::Token,
 };
 
@@ -106,6 +106,7 @@ impl Parser {
             Klet => return Expr::Let(self.let_expr()),
             Kdef => return Expr::Function(self.function_expr()),
             Kmatch => return Expr::Match(self.match_expr()),
+            Kimport => return Expr::Import(self.import_expr()),
             op @ (Bang | Minus) => {
                 let op = Expr::Identifier(op.to_string());
                 self.advance();
@@ -136,6 +137,15 @@ impl Parser {
                         args: self.parse_comma_seperated(LParen, RParen, Self::expr),
                     })
                 }
+
+                Dot => {
+                    self.advance();
+                    expr = Expr::Access(AccessExpr {
+                        expr: Box::new(expr),
+                        name: self.expect_identifier(),
+                    })
+                }
+
                 _ => break,
             }
         }
@@ -176,6 +186,17 @@ impl Parser {
         FunctionExpr { args, expr, clos }
     }
 
+    fn import_expr(&mut self) -> ImportExpr {
+        use Token::*;
+
+        self.expect(Kimport);
+        let mut parts = vec![self.expect_identifier()];
+        while self.optional(Dot) {
+            parts.push(self.expect_identifier())
+        }
+
+        ImportExpr { parts }
+    }
 
     fn match_expr(&mut self) -> MatchExpr {
         use Token::*;
@@ -245,6 +266,18 @@ impl Parser {
             todo!("Error handling")
         }
         expr
+    }
+
+    pub fn parse_module(&mut self) -> Vec<(String, Expr)> {
+        let mut module = vec![];
+        while let Token::Identifier(name) = self.current_token() {
+            let name = name.clone();
+            self.advance();
+            self.expect(Token::Equal);
+            let expr = self.expr();
+            module.push((name, expr))
+        } 
+        module
     }
 
     fn parse_comma_seperated<T>(

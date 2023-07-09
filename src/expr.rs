@@ -8,6 +8,8 @@ pub enum Expr {
     Application(ApplicationExpr),
     Sequence(SequenceExpr),
     Match(MatchExpr),
+    Import(ImportExpr),
+    Access(AccessExpr),
     UnitValue
 }
 
@@ -50,4 +52,15 @@ pub enum Pattern {
     NegativeInteger(String),
     Bool(bool),
     Unit
+}
+
+#[derive(Clone)]
+pub struct ImportExpr {
+    pub parts: Vec<String>
+}
+
+#[derive(Clone)]
+pub struct AccessExpr {
+    pub expr: Box<Expr>,
+    pub name: String,
 }

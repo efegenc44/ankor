@@ -29,6 +29,7 @@ impl Iterator for Lexer {
             '<' => if self.peek_is('=') { LessEqual } else { Less },
             '>' => if self.peek_is('=') { GreaterEqual } else { Greater },
             ';' => Semicolon,
+            '.' => Dot,
             '\0' => End,
 
             ' ' | '\t' | '\r' | '\n' => {
@@ -102,6 +103,7 @@ impl Lexer {
         let identifier = self.chars[start..self.index].iter().collect::<String>();
 
         match identifier.as_str() {
+            "import" => Kimport,
             "let" => Klet,
             "def" => Kdef,
             "in" => Kin,

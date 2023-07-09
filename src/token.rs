@@ -20,7 +20,9 @@ pub enum Token {
     Comma,
     Semicolon,
     FatArrow,
+    Dot,
 
+    Kimport,
     Klet,
     Kdef,
     Kin,
@@ -55,6 +57,8 @@ impl std::fmt::Display for Token {
             Comma => write!(f, ","),
             Semicolon => write!(f, ";"),
             FatArrow => write!(f, "=>"),
+            Dot => write!(f, "."),
+            Kimport => write!(f, "import"),
             Klet => write!(f, "let"),
             Kdef => write!(f, "def"),
             Kin => write!(f, "in"),

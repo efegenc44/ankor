@@ -6,7 +6,7 @@ mod token;
 mod value;
 mod global;
 
-use std::{io::{self, Write}, env::args};
+use std::{io::{self, Write}, env::args, fs, collections::HashMap, rc::Rc, cell::RefCell};
 
 use engine::Engine;
 use lexer::Lexer;
@@ -26,10 +26,10 @@ fn main() -> io::Result<()> {
 }
 
 fn from_file(file_path: &str) -> io::Result<()> {
-    let file = std::fs::read_to_string(file_path)?;
+    let file = fs::read_to_string(file_path)?;
     let tokens = Lexer::new(&file).collect();
-    let astree = Parser::new(tokens).parse();
-    let result = Engine::new().evaluate(&astree);
+    let astree = Parser::new(tokens).parse_module();
+    let result = Engine::new().run_from_entry(&astree);
     println!("= {result}");
     Ok(())
 }
@@ -55,7 +55,7 @@ fn repl() -> io::Result<()> {
 
         let tokens = Lexer::new(input).collect();
         let astree = Parser::new(tokens).parse();
-        let result = engine.evaluate(&astree);
+        let result = engine.evaluate(&astree, &Rc::new(RefCell::new(HashMap::with_capacity(0))));
 
         println!("= {result}");
     }

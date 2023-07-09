@@ -1,8 +1,8 @@
-use std::{rc::Rc, collections::HashMap};
+use std::{rc::Rc, collections::HashMap, cell::RefCell};
 
 use crate::{
-    expr::{ApplicationExpr, Expr, FunctionExpr, LetExpr, SequenceExpr, MatchExpr, Pattern},
-    value::{Value, FunctionValue}, global::get_global,
+    expr::{ApplicationExpr, Expr, FunctionExpr, LetExpr, SequenceExpr, MatchExpr, Pattern, ImportExpr, AccessExpr},
+    value::{Value, FunctionValue, Module}, global::get_global, lexer::Lexer, parser::Parser,
 };
 
 pub struct Engine {
@@ -25,11 +25,15 @@ impl Engine {
         }
     }
 
-    fn resolve_identifier(&self, ident: &str) -> Value {
+    fn resolve_identifier(&self, ident: &str, module: &Module) -> Value {
         for (name, value) in self.locals.iter().rev() {
             if name == ident {
                 return value.clone();
             }
+        }
+
+        if let Some(value) = module.borrow().get(ident) {
+            return value.clone()
         }
 
         match self.global.get(ident) {
@@ -38,31 +42,33 @@ impl Engine {
         } 
     }
 
-    pub fn evaluate(&mut self, expr: &Expr) -> Value {
+    pub fn evaluate(&mut self, expr: &Expr, module: &Module) -> Value {
         use Expr::*;
         match expr {
-            Identifier(ident) => self.resolve_identifier(ident),
+            Identifier(ident) => self.resolve_identifier(ident, module),
             Integer(int) => Value::Integer(int.parse().unwrap()),
             Bool(bool) => Value::Bool(*bool),
-            Let(let_expr) => self.evaluate_let_expr(let_expr),
-            Function(function_expr) => self.evaluate_function_expr(function_expr),
-            Application(application_expr) => self.evaluate_application_expr(application_expr),
-            Sequence(sequnce_expr) => self.evaluate_sequence_expr(sequnce_expr),
-            Match(match_expr) => self.evaluate_match_expr(match_expr),
+            Let(let_expr) => self.evaluate_let_expr(let_expr, module),
+            Function(function_expr) => self.evaluate_function_expr(function_expr, module),
+            Application(application_expr) => self.evaluate_application_expr(application_expr, module),
+            Sequence(sequnce_expr) => self.evaluate_sequence_expr(sequnce_expr, module),
+            Match(match_expr) => self.evaluate_match_expr(match_expr, module),
+            Import(import_expr) => self.evaluate_import_expr(import_expr),
+            Access(access_expr) => self.evaluate_access_expr(access_expr, module),
             UnitValue => Value::Unit,
         }
     }
 
-    fn evaluate_let_expr(&mut self, let_expr: &LetExpr) -> Value {
+    fn evaluate_let_expr(&mut self, let_expr: &LetExpr, module: &Module) -> Value {
         let LetExpr { name, vexp, expr } = let_expr;
-        let value = self.evaluate(vexp);
+        let value = self.evaluate(vexp, module);
         self.define_local(name.clone(), value);
-        let result = self.evaluate(expr);
+        let result = self.evaluate(expr, module);
         self.remove_local(1);
         result
     }
 
-    fn evaluate_function_expr(&mut self, function_expr: &FunctionExpr) -> Value {
+    fn evaluate_function_expr(&mut self, function_expr: &FunctionExpr, module: &Module) -> Value {
         let function_value = FunctionValue {
             args: function_expr.args.clone(),
             expr: function_expr.expr.clone(),
@@ -70,18 +76,19 @@ impl Engine {
                 .as_ref()
                 .map(|clos| clos
                     .iter()
-                    .map(|ident| (ident.clone(), self.resolve_identifier(ident))).collect()),
+                    .map(|ident| (ident.clone(), self.resolve_identifier(ident, module))).collect()),
+            modl: module.clone()
         };
         
         Value::Function(Rc::new(function_value))
     }
 
-    fn evaluate_application_expr(&mut self, application_expr: &ApplicationExpr) -> Value {
+    fn evaluate_application_expr(&mut self, application_expr: &ApplicationExpr, module: &Module) -> Value {
         let ApplicationExpr { func, args } = application_expr;
 
-        let arg_values: Vec<_> = args.iter().map(|expr| self.evaluate(expr)).collect();
+        let arg_values: Vec<_> = args.iter().map(|expr| self.evaluate(expr, module)).collect();
 
-        match self.evaluate(func) {
+        match self.evaluate(func, module) {
             Value::Native(func) => func(&arg_values),
             Value::Function(func) => {
                 if args.len() != func.args.len() {
@@ -100,7 +107,7 @@ impl Engine {
                 for (arg, value) in std::iter::zip(func.args.clone(), arg_values) {
                     self.define_local(arg, value);
                 }
-                let result = self.evaluate(&func.expr);
+                let result = self.evaluate(&func.expr, &func.modl);
                 self.remove_local(args.len() + clos_count);
                 result
             },
@@ -108,19 +115,19 @@ impl Engine {
         }
     }
 
-    fn evaluate_sequence_expr(&mut self, sequnce_expr: &SequenceExpr) -> Value {
+    fn evaluate_sequence_expr(&mut self, sequnce_expr: &SequenceExpr, module: &Module) -> Value {
         let SequenceExpr { lhs, rhs } = sequnce_expr;
-        self.evaluate(lhs);
-        self.evaluate(rhs)
+        self.evaluate(lhs, module);
+        self.evaluate(rhs, module)
     }
 
-    fn evaluate_match_expr(&mut self, match_expr: &MatchExpr) -> Value {
+    fn evaluate_match_expr(&mut self, match_expr: &MatchExpr, module: &Module) -> Value {
         let MatchExpr { expr, arms } = match_expr;
 
-        let value = self.evaluate(expr);
+        let value = self.evaluate(expr, module);
         for (pattern, expr) in arms {
             if let Some(local_count) = self.fits_pattern(&value, pattern) {
-                let result = self.evaluate(expr);
+                let result = self.evaluate(expr, module);
                 self.remove_local(local_count);
                 return result
             }
@@ -145,4 +152,49 @@ impl Engine {
             _ => false
         }.then_some(local_count)
     } 
+
+    fn evaluate_import_expr(&mut self, import_expr: &ImportExpr) -> Value {
+        let ImportExpr { parts } = import_expr;
+    
+        let file_path = parts.join("/") + ".ank";
+        let file = std::fs::read_to_string(file_path).expect("Error handling");
+        let tokens = Lexer::new(&file).collect();
+        let astree = Parser::new(tokens).parse_module();
+        Value::Module(self.evaluate_module(&astree))
+    }
+
+
+    fn evaluate_access_expr(&mut self, access_expr: &AccessExpr, module: &Module) -> Value {
+        let AccessExpr { expr, name } = access_expr;
+
+        let Value::Module(module) = self.evaluate(expr, module) else {
+            todo!("Error handling")
+        };
+    
+        match module.borrow().get(name) {
+            Some(value) => return value.clone(),
+            None => todo!("Error handling"),
+        };
+    }
+
+    pub fn evaluate_module(&mut self, definitions: &Vec<(String, Expr)>) -> Module {
+        let module = Rc::new(RefCell::new(HashMap::new()));
+        for (name, expr) in definitions {
+            let value = self.evaluate(expr, &module.clone());
+            module.borrow_mut().insert(name.clone(), value);
+        } 
+
+        module
+    }
+
+    pub fn run_from_entry(&mut self, definitions: &Vec<(String, Expr)>) -> Value {
+        let module = self.evaluate_module(definitions);
+        let main = module.borrow_mut().remove("main").expect("Error handling");
+        let Value::Function(func) = main else {
+            todo!("Error handling");
+        };
+
+        // Pass cli args if 1 arg provided
+        self.evaluate(&func.expr, &module)
+    }
 }

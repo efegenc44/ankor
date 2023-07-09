@@ -1,0 +1,12 @@
+fib = def(n) =>
+    match n
+    | 1 => 1
+    | 2 => 1
+    | n => fib(n - 1) + fib(n - 2)
+
+fac = def(n) => 
+    match n
+    | 0 => 1
+    | n => n * fac(n - 1)
+
+pi = 3

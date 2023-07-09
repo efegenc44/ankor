@@ -1,15 +1,8 @@
-let fib = def(n) =>
-    match n
-    | 1 => 1
-    | 2 => 1
-    | n => fib(n - 1) + fib(n - 2)
-in 
+test2 = import src.test2
 
-let fac = def(n) => 
-    match n
-    | 0 => 1
-    | n => n * fac(n - 1) 
-in 
-    println(fib(25));
-    println(fac(10))
+fib = test2.fib
+fac = test2.fac
+
+main = def() => 
+    println(test2.pi, fib(25), fac(20))
 
