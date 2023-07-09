@@ -106,6 +106,14 @@ impl Parser {
             Klet => return Expr::Let(self.let_expr()),
             Kdef => return Expr::Function(self.function_expr()),
             Kmatch => return Expr::Match(self.match_expr()),
+            op @ (Bang | Minus) => {
+                let op = Expr::Identifier(op.to_string());
+                self.advance();
+                return Expr::Application(ApplicationExpr {
+                    func: Box::new(op),
+                    args: vec![self.product()]
+                })
+            }
             LParen => {
                 self.advance();
                 return if self.optional(RParen) {

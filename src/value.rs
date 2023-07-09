@@ -24,6 +24,13 @@ impl Value {
             _ => todo!("Error handling"),
         }
     }
+
+    pub fn to_bool(&self) -> bool {
+        match self {
+            Self::Bool(bool) => *bool,
+            _ => todo!("Error handling"),
+        }
+    }
 }
 
 impl std::fmt::Display for Value {
