@@ -207,7 +207,7 @@ impl Parser {
 
         let pattern = match self.current_token() {
             Identifier(ident) => Pattern::Identifier(ident.clone()),
-            Integer(int) => Pattern::Integer(int.clone()),
+            Integer(int) => Pattern::NonNegativeInteger(int.clone()),
             Ktrue => Pattern::Bool(true),
             Kfalse => Pattern::Bool(false),
             Minus => {
@@ -215,7 +215,7 @@ impl Parser {
                 let Integer(int) = self.current_token() else {
                     todo!("Error handling")
                 };
-                Pattern::Integer("-".to_string() + &int)
+                Pattern::NegativeInteger(int.clone())
             }
             LParen => {
                 self.advance();

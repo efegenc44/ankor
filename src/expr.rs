@@ -46,7 +46,8 @@ pub struct MatchExpr {
 #[derive(Clone)]
 pub enum Pattern {
     Identifier(String),
-    Integer(String),    
+    NonNegativeInteger(String),
+    NegativeInteger(String),
     Bool(bool),
     Unit
 }

@@ -133,7 +133,8 @@ impl Engine {
         let mut local_count = 0;
 
         match (value, pattern) {
-            (Value::Integer(lint), Pattern::Integer(rint)) => lint == &rint.parse::<isize>().unwrap(),
+            (Value::Integer(lint), Pattern::NonNegativeInteger(rint)) => lint == &rint.parse::<isize>().unwrap(),
+            (Value::Integer(lint), Pattern::NegativeInteger(rint)) => lint == &-rint.parse::<isize>().unwrap(),
             (Value::Bool(lbool), Pattern::Bool(rbool)) => lbool == rbool,
             (Value::Unit, Pattern::Unit) => true,
             (_, Pattern::Identifier(ident)) => {
