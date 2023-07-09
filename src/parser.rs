@@ -132,9 +132,12 @@ impl Parser {
         expr
     }
 
-    binary_expr_precedence_level!(term,       product,    Token::Star,                LEFT_ASSOC);
-    binary_expr_precedence_level!(arithmetic, term,       Token::Plus | Token::Minus, LEFT_ASSOC);
-    binary_expr_precedence_level!(sequence,   arithmetic,                             SEQUENCE);
+    binary_expr_precedence_level!(term,       product,    Token::Star,                               LEFT_ASSOC);
+    binary_expr_precedence_level!(arithmetic, term,       Token::Plus        | Token::Minus,         LEFT_ASSOC);
+    binary_expr_precedence_level!(comparison, arithmetic, Token::Less        | Token::LessEqual |
+                                                          Token::Greater     | Token:: GreaterEqual, NO_ASSOC);
+    binary_expr_precedence_level!(equality,   comparison, Token::DoubleEqual | Token::BangEqual,     NO_ASSOC);
+    binary_expr_precedence_level!(sequence,   equality,                                              SEQUENCE);
 
     fn let_expr(&mut self) -> LetExpr {
         use Token::*;
@@ -156,14 +159,19 @@ impl Parser {
         let args = self.parse_comma_seperated(LParen, RParen, Self::expect_identifier);
         let clos = matches!(self.current_token(), Pipe)
             .then(|| self.parse_comma_seperated(Pipe, Pipe, Self::expect_identifier));
-        self.expect(Equal);
+        self.expect(FatArrow);
         let expr = Box::new(self.expr());
 
         FunctionExpr { args, expr, clos }
     }
 
     pub fn expr(&mut self) -> Expr {
-        self.sequence()
+        let expr = self.sequence();
+
+        if self.index != self.tokens.len() - 1 {
+            todo!("Error handling")
+        }
+        expr
     }
 
     fn parse_comma_seperated<T>(

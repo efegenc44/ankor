@@ -23,7 +23,11 @@ impl Iterator for Lexer {
             ')' => RParen,
             '|' => Pipe,
             ',' => Comma,
-            '=' => Equal,
+            '=' => if self.peek_is('=') { DoubleEqual } else 
+                   if self.peek_is('>') { FatArrow } else { Equal },
+            '!' => if self.peek_is('=') { BangEqual } else { Bang },
+            '<' => if self.peek_is('=') { LessEqual } else { Less },
+            '>' => if self.peek_is('=') { GreaterEqual } else { Greater },
             ';' => Semicolon,
             '\0' => End,
 
@@ -57,6 +61,15 @@ impl Lexer {
 
     fn advance(&mut self) {
         self.index += 1;
+    }
+
+    fn peek_is(&mut self, ch: char) -> bool {
+        if self.chars.get(self.index + 1).unwrap() == &ch {
+            self.advance();
+            true
+        } else {
+            false
+        }
     }
 
     fn lex_number(&mut self) -> Token {

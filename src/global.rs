@@ -17,6 +17,15 @@ macro_rules! two_integers {
     }};
 }
 
+macro_rules! two_values {
+    ($values:ident) => {{
+        let [left, right] = $values else { 
+            unreachable!() 
+        };
+        (left, right)
+    }};
+}
+
 pub fn get_global() -> HashMap<String, Value> {
     env! {
         "println" -> |values| {
@@ -46,6 +55,36 @@ pub fn get_global() -> HashMap<String, Value> {
         "*" ->  |values| {
             let (left, right) = two_integers!(values);
             Value::Integer(left * right)
+        }
+
+        "<" ->  |values| {
+            let (left, right) = two_integers!(values);
+            Value::Bool(left < right)
+        }
+
+        "<=" ->  |values| {
+            let (left, right) = two_integers!(values);
+            Value::Bool(left <= right)
+        }
+
+        ">" ->  |values| {
+            let (left, right) = two_integers!(values);
+            Value::Bool(left > right)
+        }
+
+        ">=" ->  |values| {
+            let (left, right) = two_integers!(values);
+            Value::Bool(left >= right)
+        }
+
+        "==" ->  |values| {
+            let (left, right) = two_values!(values);
+            Value::Bool(left == right)
+        }
+
+        "!=" ->  |values| {
+            let (left, right) = two_values!(values);
+            Value::Bool(left != right)
         }
     }
 }
