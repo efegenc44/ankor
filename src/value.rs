@@ -19,6 +19,7 @@ pub enum Value {
     Function(Rc<FunctionValue>),
     Native(fn(&[Value]) -> Value),
     Module(Module),
+    List(Rc<Vec<Value>>),
     Unit
 }
 
@@ -48,6 +49,19 @@ impl std::fmt::Display for Value {
             Function(_) => write!(f, "<function>"),
             Native(_) => write!(f, "<native function>"),
             Module(_) => write!(f, "<module>"),
+            List(list) => {
+                match &list[..] {
+                    [] => writeln!(f, "[]"),
+                    [x] => writeln!(f, "[{x}]"),
+                    [x, xs @ .., l] => {
+                        write!(f, "[{x}")?;
+                        for value in xs {
+                            write!(f, ", {value}")?;
+                        }
+                        write!(f, ", {l}]")
+                    }
+                }
+            },
             Unit => write!(f, "()"),
         }
     }
@@ -66,6 +80,7 @@ impl std::cmp::PartialEq for Value {
         match (self, other) {
             (Integer(lint), Integer(rint)) => lint == rint,
             (Bool(lbool), Bool(rbool)) => lbool == rbool,
+            (List(llist), List(rlist)) => llist == rlist,
             (Function(_), Function(_)) => false,
             (Native(_), Native(_)) => false,
             (Module(_), Module(_)) => false,

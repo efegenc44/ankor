@@ -21,6 +21,8 @@ impl Iterator for Lexer {
             '*' => Star,
             '(' => LParen,
             ')' => RParen,
+            '[' => LSquare,
+            ']' => RSquare,
             '|' => Pipe,
             ',' => Comma,
             '=' => if self.peek_is('=') { DoubleEqual } else 

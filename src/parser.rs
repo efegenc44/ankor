@@ -107,6 +107,7 @@ impl Parser {
             Kdef => return Expr::Function(self.function_expr()),
             Kmatch => return Expr::Match(self.match_expr()),
             Kimport => return Expr::Import(self.import_expr()),
+            LSquare => return Expr::List(self.parse_comma_seperated(LSquare, RSquare, Self::expr)),
             op @ (Bang | Minus) => {
                 let op = Expr::Identifier(op.to_string());
                 self.advance();
@@ -231,6 +232,19 @@ impl Parser {
             Integer(int) => Pattern::NonNegativeInteger(int.clone()),
             Ktrue => Pattern::Bool(true),
             Kfalse => Pattern::Bool(false),
+            Dot => {
+                self.advance();
+                self.expect(Dot);
+                // TODO;
+                let ident = if let Identifier(ident) = self.current_token().clone() {
+                    self.advance();
+                    Some(ident)
+                } else {
+                    None
+                };
+                return Pattern::Rest(ident)
+            }
+            LSquare => return Pattern::List(self.parse_comma_seperated(LSquare, RSquare, Self::pattern)),
             Minus => {
                 self.advance();
                 let Integer(int) = self.current_token() else {

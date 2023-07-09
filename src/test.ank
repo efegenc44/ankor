@@ -3,6 +3,13 @@ test2 = import src.test2
 fib = test2.fib
 fac = test2.fac
 
-main = def() => 
+a = def() => 
     println(test2.pi, fib(25), fac(20))
+
+main = def() =>
+    match [1, 2, true, [4, 5]] 
+    | [] => false
+    | [1, ..r, [a, _]] => 
+        println(r == [2, true]);
+        println(a == 4)
 

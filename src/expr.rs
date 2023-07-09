@@ -10,6 +10,7 @@ pub enum Expr {
     Match(MatchExpr),
     Import(ImportExpr),
     Access(AccessExpr),
+    List(Vec<Expr>),
     UnitValue
 }
 
@@ -45,12 +46,14 @@ pub struct MatchExpr {
     pub arms: Vec<(Pattern, Expr)>
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Pattern {
     Identifier(String),
     NonNegativeInteger(String),
     NegativeInteger(String),
     Bool(bool),
+    List(Vec<Pattern>),
+    Rest(Option<String>),
     Unit
 }
 

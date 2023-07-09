@@ -55,6 +55,7 @@ impl Engine {
             Match(match_expr) => self.evaluate_match_expr(match_expr, module),
             Import(import_expr) => self.evaluate_import_expr(import_expr),
             Access(access_expr) => self.evaluate_access_expr(access_expr, module),
+            List(list) => self.evaluate_list_expr(list, module),
             UnitValue => Value::Unit,
         }
     }
@@ -126,31 +127,80 @@ impl Engine {
 
         let value = self.evaluate(expr, module);
         for (pattern, expr) in arms {
-            if let Some(local_count) = self.fits_pattern(&value, pattern) {
+            let (res, local_count) = self.fits_pattern(&value, pattern);
+            if res {
                 let result = self.evaluate(expr, module);
                 self.remove_local(local_count);
                 return result
             }
+            self.remove_local(local_count);
         }
 
         todo!("Error handling")
     }
 
-    fn fits_pattern(&mut self, value: &Value, pattern: &Pattern) -> Option<usize> {
+    fn fits_pattern(&mut self, value: &Value, pattern: &Pattern) -> (bool, usize) {
         let mut local_count = 0;
 
-        match (value, pattern) {
+        (match (value, pattern) {
             (Value::Integer(lint), Pattern::NonNegativeInteger(rint)) => lint == &rint.parse::<isize>().unwrap(),
             (Value::Integer(lint), Pattern::NegativeInteger(rint)) => lint == &-rint.parse::<isize>().unwrap(),
             (Value::Bool(lbool), Pattern::Bool(rbool)) => lbool == rbool,
             (Value::Unit, Pattern::Unit) => true,
+            (Value::List(list), Pattern::List(patterns)) => {
+                // Definitely, there is a better way to do it
+                if patterns.is_empty() && !list.is_empty() {
+                    return (false, local_count)
+                }
+
+                for (index, pattern) in patterns.iter().enumerate() {
+                    if let Pattern::Rest(name) = pattern {
+                        let remaining_pattern_len = patterns[index+1..].len();
+                        let remaining_value_len = list[index..].len();
+                        
+                        if remaining_pattern_len > remaining_value_len {
+                            return (false, local_count)
+                        }                        
+                        
+                        if let Some(name) = name {
+                            let rest = list[index..list.len() - remaining_pattern_len].to_vec();
+                            self.define_local(name.clone(), Value::List(Rc::new(rest)));
+                            local_count += 1;
+                        }
+
+                        for i in 0..remaining_pattern_len {
+                            let value = list.get(list.len() - 1 - i).unwrap();
+                            let pattern = patterns.get(patterns.len() - 1 - i).unwrap();
+                        
+                            if let Pattern::Rest(_) = pattern {
+                                todo!("Error handling")
+                            } 
+
+                            if let (false, local_count) = self.fits_pattern(value, pattern) {
+                                return (false, local_count)
+                            }
+                        }
+                        break
+                    }
+
+                    let value = match list.get(index) {
+                        Some(value) => value,
+                        None => return (false, local_count),
+                    };
+                    if let (false, local_count) = self.fits_pattern(value, pattern) {
+                        return (false, local_count)
+                    }
+                }
+
+                true
+            }
             (_, Pattern::Identifier(ident)) => {
                 self.define_local(ident.clone(), value.clone());
                 local_count += 1;
                 true
             },
             _ => false
-        }.then_some(local_count)
+        }, local_count)
     } 
 
     fn evaluate_import_expr(&mut self, import_expr: &ImportExpr) -> Value {
@@ -163,6 +213,9 @@ impl Engine {
         Value::Module(self.evaluate_module(&astree))
     }
 
+    fn evaluate_list_expr(&mut self, list: &[Expr], module: &Module) -> Value {
+        Value::List(Rc::new(list.iter().map(|expr| self.evaluate(expr, module)).collect()))
+    }
 
     fn evaluate_access_expr(&mut self, access_expr: &AccessExpr, module: &Module) -> Value {
         let AccessExpr { expr, name } = access_expr;
