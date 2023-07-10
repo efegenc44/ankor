@@ -1,8 +1,13 @@
 use std::rc::Rc;
 
 use crate::{
-    expr::{ApplicationExpr, Expr, FunctionExpr, LetExpr, SequenceExpr, MatchExpr, Pattern, ImportExpr, AccessExpr},
-    value::{Value, FunctionValue, Module}, lexer::Lexer, parser::Parser, prelude::get_prelude,
+    expr::{
+        AccessExpr, ApplicationExpr, Expr, FunctionExpr, ImportExpr,
+        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr,
+    },
+    lexer::Lexer, parser::Parser,
+    prelude::get_prelude,
+    value::{FunctionValue, Module, Value},
 };
 
 pub struct Engine {
@@ -39,10 +44,12 @@ impl Engine {
 
     pub fn evaluate(&mut self, expr: &Expr, module: &Module) -> Value {
         use Expr::*;
+
         match expr {
-            Identifier(ident) => self.resolve_identifier(ident, module),
             Integer(int) => Value::Integer(int.parse().unwrap()),
             Bool(bool) => Value::Bool(*bool),
+            UnitValue => Value::Unit,
+            Identifier(ident) => self.resolve_identifier(ident, module),
             Let(let_expr) => self.evaluate_let_expr(let_expr, module),
             Function(function_expr) => self.evaluate_function_expr(function_expr, module),
             Application(application_expr) => self.evaluate_application_expr(application_expr, module),
@@ -50,13 +57,13 @@ impl Engine {
             Match(match_expr) => self.evaluate_match_expr(match_expr, module),
             Import(import_expr) => self.evaluate_import_expr(import_expr),
             Access(access_expr) => self.evaluate_access_expr(access_expr, module),
-            List(list) => self.evaluate_list_expr(list, module),
-            UnitValue => Value::Unit,
+            List(list_expr) => self.evaluate_list_expr(list_expr, module),
         }
     }
 
     fn evaluate_let_expr(&mut self, let_expr: &LetExpr, module: &Module) -> Value {
         let LetExpr { name, vexp, expr } = let_expr;
+
         let value = self.evaluate(vexp, module);
         self.define_local(name.clone(), value);
         let result = self.evaluate(expr, module);
@@ -91,18 +98,20 @@ impl Engine {
                     todo!("Error handling")
                 }
 
-                let clos_count = if let Some(clos) = &func.clos {
-                    for (arg, value) in clos {
-                        self.define_local(arg.clone(), value.clone());
-                    }
-                    clos.len()
-                } else {
-                    0
-                };
-                
+                let clos_count = (&func.clos)
+                    .as_ref()
+                    .map(|clos| {
+                        for (arg, value) in clos {
+                            self.define_local(arg.clone(), value.clone());
+                        }
+                        clos.len()
+                    })
+                    .unwrap_or(0);
+
                 for (arg, value) in std::iter::zip(func.args.clone(), arg_values) {
                     self.define_local(arg, value);
                 }
+
                 let result = self.evaluate(&func.expr, &func.modl);
                 self.remove_local(args.len() + clos_count);
                 result
@@ -113,6 +122,7 @@ impl Engine {
 
     fn evaluate_sequence_expr(&mut self, sequnce_expr: &SequenceExpr, module: &Module) -> Value {
         let SequenceExpr { lhs, rhs } = sequnce_expr;
+
         self.evaluate(lhs, module);
         self.evaluate(rhs, module)
     }
@@ -122,8 +132,8 @@ impl Engine {
 
         let value = self.evaluate(expr, module);
         for (pattern, expr) in arms {
-            let (res, local_count) = self.fits_pattern(&value, pattern);
-            if res {
+            let (fits, local_count) = self.fits_pattern(&value, pattern);
+            if fits {
                 let result = self.evaluate(expr, module);
                 self.remove_local(local_count);
                 return result
@@ -208,8 +218,10 @@ impl Engine {
         Value::Module(Self::evaluate_module(&astree))
     }
 
-    fn evaluate_list_expr(&mut self, list: &[Expr], module: &Module) -> Value {
-        Value::List(Rc::new(list.iter().map(|expr| self.evaluate(expr, module)).collect()))
+    fn evaluate_list_expr(&mut self, list_expr: &ListExpr, module: &Module) -> Value {
+        let ListExpr { exprs } = list_expr;
+
+        Value::List(Rc::new(exprs.iter().map(|expr| self.evaluate(expr, module)).collect()))
     }
 
     fn evaluate_access_expr(&mut self, access_expr: &AccessExpr, module: &Module) -> Value {
@@ -218,7 +230,7 @@ impl Engine {
         let Value::Module(module) = self.evaluate(expr, module) else {
             todo!("Error handling")
         };
-    
+
         let module = module.borrow();
         match module.get(name) {
             Some(value) => value.clone(),
@@ -230,7 +242,8 @@ impl Engine {
         let mut engine = Self::new();
         let module = get_prelude();
         for (name, expr) in definitions {
-            module.borrow_mut().insert(name.clone(), engine.evaluate(expr, &module));
+            let value = engine.evaluate(expr, &module);
+            module.borrow_mut().insert(name.clone(), value);
         }
 
         module

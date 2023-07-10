@@ -35,16 +35,21 @@ impl Iterator for Lexer {
             '.' => Dot,
             '\0' => End,
 
-            ' ' | '\t' | '\r' | '\n' => {
-                self.advance();
-                return self.next();
+            non_trivial => return match non_trivial {
+                ' ' | '\t' | '\r' | '\n' => {
+                    self.advance();
+                    self.next()
+                }
+                '0'..='9' => {
+                    Some(self.lex_number())
+                }
+                ch if Self::valid_symbol_character(ch) => {
+                    Some(self.lex_symbol())
+                }
+                _ => todo!("Error handling")
             }
-            '0'..='9' => return Some(self.lex_number()),
-            ch if Self::valid_symbol_character(ch) => return Some(self.lex_symbol()),
-            _ => todo!("Error handling"),
         };
         self.advance();
-
         Some(token)
     }
 }
@@ -103,9 +108,9 @@ impl Lexer {
             self.advance();
         }
 
-        let identifier = self.chars[start..self.index].iter().collect::<String>();
+        let symbol = self.chars[start..self.index].iter().collect::<String>();
 
-        match identifier.as_str() {
+        match symbol.as_str() {
             "import" => Kimport,
             "let" => Klet,
             "def" => Kdef,
@@ -113,7 +118,7 @@ impl Lexer {
             "match" => Kmatch,
             "true" => Ktrue,
             "false" => Kfalse,
-            _ => Identifier(identifier),
+            _ => Identifier(symbol),
         }
     }
 

@@ -1,5 +1,8 @@
 use crate::{
-    expr::{SequenceExpr, ApplicationExpr, Expr, FunctionExpr, LetExpr, MatchExpr, Pattern, ImportExpr, AccessExpr},
+    expr::{
+        SequenceExpr, ApplicationExpr, Expr, FunctionExpr, LetExpr,
+        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr
+    },
     token::Token,
 };
 
@@ -98,38 +101,47 @@ impl Parser {
     fn product(&mut self) -> Expr {
         use Token::*;
 
-        let mut expr = match self.current_token() {
+        let expr = match self.current_token() {
             Identifier(symbol) => Expr::Identifier(symbol.clone()),
             Integer(int) => Expr::Integer(int.clone()),
             Ktrue => Expr::Bool(true),
             Kfalse => Expr::Bool(false),
-            Klet => return Expr::Let(self.let_expr()),
-            Kdef => return Expr::Function(self.function_expr()),
-            Kmatch => return Expr::Match(self.match_expr()),
-            Kimport => return Expr::Import(self.import_expr()),
-            LSquare => return Expr::List(self.parse_comma_seperated(LSquare, RSquare, Self::expr)),
-            op @ (Bang | Minus) => {
-                let op = Expr::Identifier(op.to_string());
-                self.advance();
-                return Expr::Application(ApplicationExpr {
-                    func: Box::new(op),
-                    args: vec![self.product()]
-                })
-            }
-            LParen => {
-                self.advance();
-                return if self.optional(RParen) {
-                    Expr::UnitValue
-                } else {
-                    let expr = self.expr();
-                    self.expect(RParen);
-                    expr
+
+            non_literal => return match non_literal {
+                Klet => Expr::Let(self.let_expr()),
+                Kdef => Expr::Function(self.function_expr()),
+                Kmatch => Expr::Match(self.match_expr()),
+                Kimport => Expr::Import(self.import_expr()),
+                LSquare => Expr::List(self.list_expr()),
+                Bang | Minus => {
+                    let op = Expr::Identifier(non_literal.to_string());
+                    self.advance();
+                    Expr::Application(ApplicationExpr {
+                        func: Box::new(op),
+                        args: vec![self.product()]
+                    })
                 }
+                LParen => {
+                    self.advance();
+                    if self.optional(RParen) {
+                        Expr::UnitValue
+                    } else {
+                        let expr = self.expr();
+                        self.expect(RParen);
+                        expr
+                    }
+                }
+                _ => todo!("Error handling"),
             }
-            _ => todo!("Error handling"),
         };
         self.advance();
+        expr
+    }
 
+    fn call_expr(&mut self) -> Expr {
+        use Token::*;
+
+        let mut expr = self.product();
         loop {
             match self.current_token() {
                 LParen => {
@@ -147,14 +159,13 @@ impl Parser {
                     })
                 }
 
-                _ => break,
+                _ => break
             }
         }
-
         expr
     }
 
-    binary_expr_precedence_level!(term,       product,    Token::Star,                               LEFT_ASSOC);
+    binary_expr_precedence_level!(term,       call_expr,  Token::Star,                               LEFT_ASSOC);
     binary_expr_precedence_level!(arithmetic, term,       Token::Plus        | Token::Minus,         LEFT_ASSOC);
     binary_expr_precedence_level!(comparison, arithmetic, Token::Less        | Token::LessEqual |
                                                           Token::Greater     | Token::GreaterEqual,  NO_ASSOC);
@@ -199,6 +210,14 @@ impl Parser {
         ImportExpr { parts }
     }
 
+    fn list_expr(&mut self) -> ListExpr {
+        use Token::*;
+
+        let exprs = self.parse_comma_seperated(LSquare, RSquare, Self::expr);
+
+        ListExpr { exprs }
+    }
+
     fn match_expr(&mut self) -> MatchExpr {
         use Token::*;
 
@@ -232,40 +251,45 @@ impl Parser {
             Integer(int) => Pattern::NonNegativeInteger(int.clone()),
             Ktrue => Pattern::Bool(true),
             Kfalse => Pattern::Bool(false),
-            Dot => {
-                self.advance();
-                self.expect(Dot);
-                // TODO;
-                let ident = if let Identifier(ident) = self.current_token().clone() {
-                    self.advance();
-                    Some(ident)
-                } else {
-                    None
-                };
-                return Pattern::Rest(ident)
-            }
-            LSquare => return Pattern::List(self.parse_comma_seperated(LSquare, RSquare, Self::pattern)),
             Minus => {
                 self.advance();
                 let Integer(int) = self.current_token() else {
                     todo!("Error handling")
                 };
                 Pattern::NegativeInteger(int.clone())
-            }
-            LParen => {
-                self.advance();
-                return if self.optional(RParen) {
-                    Pattern::Unit
-                } else {
-                    let pattern = self.pattern();
-                    self.expect(RParen);
-                    pattern
+            },
+
+            non_literal => return match non_literal {
+                LSquare => Pattern::List(
+                    self.parse_comma_seperated(LSquare, RSquare, Self::pattern)
+                ),
+                Dot => {
+                    self.advance();
+                    self.expect(Dot);
+                    let ident = match self.current_token() {
+                        Identifier(ident) => {
+                            let ident = ident.clone();
+                            self.advance();
+                            Some(ident)
+                        }
+                        _ => None,
+                    };
+                    Pattern::Rest(ident)
                 }
+                LParen => {
+                    self.advance();
+                    if self.optional(RParen) {
+                        Pattern::Unit
+                    } else {
+                        let pattern = self.pattern();
+                        self.expect(RParen);
+                        pattern
+                    }
+                }
+                _ => todo!("Error handling")
             }
-            _ => todo!("Error handling")            
         };
         self.advance();
-
         pattern
     }
 

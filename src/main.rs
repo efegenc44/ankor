@@ -14,14 +14,10 @@ use lexer::Lexer;
 use crate::{parser::Parser, prelude::get_prelude};
 
 fn main() -> io::Result<()> {
-    match &args().collect::<Vec<_>>()[..] {
-        [] => unreachable!(),
-        [_] => repl(),
-        [_, file_path] => from_file(file_path),
-        _ => {
-            println!("usage: ./ankor [file]");
-            Ok(())
-        }
+    match &args().collect::<Vec<_>>()[1..] {
+        [] => repl(),
+        [file] => from_file(file),
+        _ => Ok(eprintln!("usage: ./ankor [file]"))
     }
 }
 

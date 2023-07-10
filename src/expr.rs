@@ -10,7 +10,7 @@ pub enum Expr {
     Match(MatchExpr),
     Import(ImportExpr),
     Access(AccessExpr),
-    List(Vec<Expr>),
+    List(ListExpr),
     UnitValue
 }
 
@@ -66,4 +66,9 @@ pub struct ImportExpr {
 pub struct AccessExpr {
     pub expr: Box<Expr>,
     pub name: String,
+}
+
+#[derive(Clone)]
+pub struct ListExpr {
+    pub exprs: Vec<Expr>
 }
