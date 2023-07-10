@@ -132,7 +132,7 @@ impl Engine {
 
         let value = self.evaluate(expr, module);
         for (pattern, expr) in arms {
-            let (fits, local_count) = self.fits_pattern(&value, pattern);
+            let (fits, local_count) = self.fits_pattern(&value, pattern, &mut 0);
             if fits {
                 let result = self.evaluate(expr, module);
                 self.remove_local(local_count);
@@ -144,9 +144,7 @@ impl Engine {
         todo!("Error handling")
     }
 
-    fn fits_pattern(&mut self, value: &Value, pattern: &Pattern) -> (bool, usize) {
-        let mut local_count = 0;
-
+    fn fits_pattern(&mut self, value: &Value, pattern: &Pattern, local_count: &mut usize) -> (bool, usize) {
         (match (value, pattern) {
             (Value::Integer(lint), Pattern::NonNegativeInteger(rint)) => lint == &rint.parse::<isize>().unwrap(),
             (Value::Integer(lint), Pattern::NegativeInteger(rint)) => lint == &-rint.parse::<isize>().unwrap(),
@@ -155,7 +153,7 @@ impl Engine {
             (Value::List(list), Pattern::List(patterns)) => {
                 // Definitely, there is a better way to do it
                 if patterns.is_empty() && !list.is_empty() {
-                    return (false, local_count)
+                    return (false, *local_count)
                 }
 
                 for (index, pattern) in patterns.iter().enumerate() {
@@ -164,13 +162,13 @@ impl Engine {
                         let remaining_value_len = list[index..].len();
                         
                         if remaining_pattern_len > remaining_value_len {
-                            return (false, local_count)
+                            return (false, *local_count)
                         }                        
                         
                         if let Some(name) = name {
                             let rest = list[index..list.len() - remaining_pattern_len].to_vec();
                             self.define_local(name.clone(), Value::List(Rc::new(rest)));
-                            local_count += 1;
+                            *local_count += 1;
                         }
 
                         for i in 0..remaining_pattern_len {
@@ -181,7 +179,7 @@ impl Engine {
                                 todo!("Error handling")
                             } 
 
-                            if let (false, local_count) = self.fits_pattern(value, pattern) {
+                            if let (false, local_count) = self.fits_pattern(value, pattern, local_count) {
                                 return (false, local_count)
                             }
                         }
@@ -190,9 +188,9 @@ impl Engine {
 
                     let value = match list.get(index) {
                         Some(value) => value,
-                        None => return (false, local_count),
+                        None => return (false, *local_count),
                     };
-                    if let (false, local_count) = self.fits_pattern(value, pattern) {
+                    if let (false, local_count) = self.fits_pattern(value, pattern, local_count) {
                         return (false, local_count)
                     }
                 }
@@ -201,11 +199,11 @@ impl Engine {
             }
             (_, Pattern::Identifier(ident)) => {
                 self.define_local(ident.clone(), value.clone());
-                local_count += 1;
+                *local_count += 1;
                 true
             },
             _ => false
-        }, local_count)
+        }, *local_count)
     } 
 
     fn evaluate_import_expr(&mut self, import_expr: &ImportExpr) -> Value {
