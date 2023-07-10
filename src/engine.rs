@@ -62,12 +62,14 @@ impl Engine {
     }
 
     fn evaluate_let_expr(&mut self, let_expr: &LetExpr, module: &Module) -> Value {
-        let LetExpr { name, vexp, expr } = let_expr;
+        let LetExpr { patt, vexp, expr } = let_expr;
 
         let value = self.evaluate(vexp, module);
-        self.define_local(name.clone(), value);
+        let (true, local_count) = self.fits_pattern(&value, patt, &mut 0) else {
+            todo!("Error handling")
+        };
         let result = self.evaluate(expr, module);
-        self.remove_local(1);
+        self.remove_local(local_count);
         result
     }
 

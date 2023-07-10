@@ -176,13 +176,13 @@ impl Parser {
         use Token::*;
 
         self.expect(Klet);
-        let name = self.expect_identifier();
+        let patt = self.pattern();
         self.expect(Equal);
         let vexp = Box::new(self.expr());
         self.expect(Kin);
         let expr = Box::new(self.expr());
 
-        LetExpr { name, vexp, expr }
+        LetExpr { patt, vexp, expr }
     }
 
     fn function_expr(&mut self) -> FunctionExpr {

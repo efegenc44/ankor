@@ -6,10 +6,13 @@ fac = test2.fac
 a = def() => 
     println(test2.pi, fib(25), fac(20))
 
-main = def() =>
+b = def() =>
     match [1, 2, true, [4, 5]] 
     | [] => false
     | [1, ..r, [a, _]] => 
         println(r == [2, true]);
         println(a == 4)
 
+main = def() => 
+    let [x, y] = [1, 4] in
+    println(x + y == 5)

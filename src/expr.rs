@@ -16,7 +16,7 @@ pub enum Expr {
 
 #[derive(Clone)]
 pub struct LetExpr {
-    pub name: String,
+    pub patt: Pattern,
     pub vexp: Box<Expr>,
     pub expr: Box<Expr>,
 }
