@@ -25,6 +25,7 @@ impl Iterator for Lexer {
             ']' => RSquare,
             '|' => Pipe,
             ',' => Comma,
+            #[allow(clippy::suspicious_else_formatting)]
             '=' => if self.peek_is('=') { DoubleEqual } else 
                    if self.peek_is('>') { FatArrow } else { Equal },
             '!' => if self.peek_is('=') { BangEqual } else { Bang },

@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc, cell::RefCell};
 
-use crate::value::Value;
+use crate::value::{Value, Module};
 
 macro_rules! env {
     ($( $name:literal -> $func:expr )*) => {
@@ -35,7 +35,7 @@ macro_rules! one_value {
     }};
 }
 
-pub fn get_global() -> HashMap<String, Value> {
+fn prelude() -> HashMap<String, Value> {
     env! {
         "println" -> |values| {
             match values {
@@ -105,3 +105,7 @@ pub fn get_global() -> HashMap<String, Value> {
         }
     }
 }
+
+pub fn get_prelude() -> Module {
+    Rc::new(RefCell::new(prelude()))
+} 

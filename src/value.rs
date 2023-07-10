@@ -4,6 +4,9 @@ use std::{rc::Rc, collections::HashMap, cell::RefCell};
 use crate::expr::Expr;
 
 pub type Module = Rc<RefCell<HashMap<String, Value>>>;
+pub type List = Rc<Vec<Value>>;
+pub type Native = fn(&[Value]) -> Value;
+pub type Function = Rc<FunctionValue>; 
 
 pub struct FunctionValue {
     pub args: Vec<String>,
@@ -16,10 +19,10 @@ pub struct FunctionValue {
 pub enum Value {
     Integer(isize),
     Bool(bool),
-    Function(Rc<FunctionValue>),
-    Native(fn(&[Value]) -> Value),
+    Function(Function),
+    Native(Native),
     Module(Module),
-    List(Rc<Vec<Value>>),
+    List(List),
     Unit
 }
 

@@ -1,18 +1,17 @@
-use std::{rc::Rc, collections::HashMap, cell::RefCell};
+use std::rc::Rc;
 
 use crate::{
     expr::{ApplicationExpr, Expr, FunctionExpr, LetExpr, SequenceExpr, MatchExpr, Pattern, ImportExpr, AccessExpr},
-    value::{Value, FunctionValue, Module}, global::get_global, lexer::Lexer, parser::Parser,
+    value::{Value, FunctionValue, Module}, lexer::Lexer, parser::Parser, prelude::get_prelude,
 };
 
 pub struct Engine {
-    global: HashMap<String, Value>,
     locals: Vec<(String, Value)>,
 }
 
 impl Engine {
     pub fn new() -> Self {
-        Self { global: get_global(), locals: vec![] }
+        Self { locals: vec![] }
     }
 
     fn define_local(&mut self, name: String, value: Value) {
@@ -32,11 +31,7 @@ impl Engine {
             }
         }
 
-        if let Some(value) = module.borrow().get(ident) {
-            return value.clone()
-        }
-
-        match self.global.get(ident) {
+        match module.borrow().get(ident) {
             Some(value) => value.clone(),
             None => todo!("Error handling"),
         } 
@@ -210,7 +205,7 @@ impl Engine {
         let file = std::fs::read_to_string(file_path).expect("Error handling");
         let tokens = Lexer::new(&file).collect();
         let astree = Parser::new(tokens).parse_module();
-        Value::Module(self.evaluate_module(&astree))
+        Value::Module(Self::evaluate_module(&astree))
     }
 
     fn evaluate_list_expr(&mut self, list: &[Expr], module: &Module) -> Value {
@@ -224,30 +219,31 @@ impl Engine {
             todo!("Error handling")
         };
     
-        match module.borrow().get(name) {
-            Some(value) => return value.clone(),
+        let module = module.borrow();
+        match module.get(name) {
+            Some(value) => value.clone(),
             None => todo!("Error handling"),
-        };
+        }   
     }
 
-    pub fn evaluate_module(&mut self, definitions: &Vec<(String, Expr)>) -> Module {
-        let module = Rc::new(RefCell::new(HashMap::new()));
+    pub fn evaluate_module(definitions: &Vec<(String, Expr)>) -> Module {
+        let mut engine = Self::new();
+        let module = get_prelude();
         for (name, expr) in definitions {
-            let value = self.evaluate(expr, &module.clone());
-            module.borrow_mut().insert(name.clone(), value);
-        } 
+            module.borrow_mut().insert(name.clone(), engine.evaluate(expr, &module));
+        }
 
         module
     }
 
-    pub fn run_from_entry(&mut self, definitions: &Vec<(String, Expr)>) -> Value {
-        let module = self.evaluate_module(definitions);
+    pub fn run_from_entry(definitions: &Vec<(String, Expr)>) -> Value {
+        let module = Self::evaluate_module(definitions);
         let main = module.borrow_mut().remove("main").expect("Error handling");
         let Value::Function(func) = main else {
             todo!("Error handling");
         };
 
         // Pass cli args if 1 arg provided
-        self.evaluate(&func.expr, &module)
+        Self::new().evaluate(&func.expr, &module)
     }
 }

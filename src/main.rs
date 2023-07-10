@@ -4,14 +4,14 @@ mod lexer;
 mod parser;
 mod token;
 mod value;
-mod global;
+mod prelude;
 
-use std::{io::{self, Write}, env::args, fs, collections::HashMap, rc::Rc, cell::RefCell};
+use std::{io::{self, Write}, env::args, fs};
 
 use engine::Engine;
 use lexer::Lexer;
 
-use crate::parser::Parser;
+use crate::{parser::Parser, prelude::get_prelude};
 
 fn main() -> io::Result<()> {
     match &args().collect::<Vec<_>>()[..] {
@@ -29,13 +29,14 @@ fn from_file(file_path: &str) -> io::Result<()> {
     let file = fs::read_to_string(file_path)?;
     let tokens = Lexer::new(&file).collect();
     let astree = Parser::new(tokens).parse_module();
-    let result = Engine::new().run_from_entry(&astree);
+    let result = Engine::run_from_entry(&astree);
     println!("= {result}");
     Ok(())
 }
 
 fn repl() -> io::Result<()> {
     let mut engine = Engine::new();
+    let prelude = get_prelude();
 
     let mut stdout = io::stdout();
     let stdin = io::stdin();
@@ -55,7 +56,7 @@ fn repl() -> io::Result<()> {
 
         let tokens = Lexer::new(input).collect();
         let astree = Parser::new(tokens).parse();
-        let result = engine.evaluate(&astree, &Rc::new(RefCell::new(HashMap::with_capacity(0))));
+        let result = engine.evaluate(&astree, &prelude);
 
         println!("= {result}");
     }
