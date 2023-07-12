@@ -260,9 +260,19 @@ impl Parser {
             },
 
             non_literal => return match non_literal {
-                LSquare => Pattern::List(
-                    self.parse_comma_seperated(LSquare, RSquare, Self::pattern)
-                ),
+                LSquare => {
+                    let list_pattern = self.parse_comma_seperated(LSquare, RSquare, Self::pattern);
+
+                    if list_pattern
+                        .iter()
+                        .filter(|pattern| matches!(pattern, Pattern::Rest(_)))
+                        .count() > 1 
+                    {
+                        todo!("Error handling")
+                    }
+
+                    Pattern::List(list_pattern)
+                },
                 Dot => {
                     self.advance();
                     self.expect(Dot);
