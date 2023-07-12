@@ -173,7 +173,9 @@ impl Parser {
     binary_expr_precedence_level!(comparison, arithmetic, Token::Less        | Token::LessEqual |
                                                           Token::Greater     | Token::GreaterEqual,  NO_ASSOC);
     binary_expr_precedence_level!(equality,   comparison, Token::DoubleEqual | Token::BangEqual,     NO_ASSOC);
-    binary_expr_precedence_level!(sequence,   equality,                                              SEQUENCE);
+    binary_expr_precedence_level!(bool_and,   equality,   Token::Kand,                               LEFT_ASSOC);
+    binary_expr_precedence_level!(bool_or,    bool_and,   Token::Kor,                                LEFT_ASSOC);
+    binary_expr_precedence_level!(sequence,   bool_or,                                               SEQUENCE);
 
     fn let_expr(&mut self) -> LetExpr {
         use Token::*;

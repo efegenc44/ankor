@@ -34,6 +34,8 @@ pub enum Token {
     Kmatch,
     Ktrue,
     Kfalse,
+    Kand,
+    Kor,
 
     End,
 }
@@ -75,6 +77,8 @@ impl std::fmt::Display for Token {
             Kmatch => write!(f, "match"),
             Ktrue => write!(f, "true"),
             Kfalse => write!(f, "false"),
+            Kand => write!(f, "and"),
+            Kor => write!(f, "or"),
             End => write!(f, "END"),
         }
     }

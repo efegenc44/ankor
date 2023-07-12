@@ -17,6 +17,15 @@ macro_rules! two_integers {
     }};
 }
 
+macro_rules! two_bools {
+    ($values:ident) => {{
+        let [left, right] = $values else { 
+            unreachable!() 
+        };
+        (left.to_bool(), right.to_bool())
+    }};
+}
+
 macro_rules! two_values {
     ($values:ident) => {{
         let [left, right] = $values else { 
@@ -102,6 +111,16 @@ fn prelude() -> HashMap<String, Value> {
         "!" ->  |values| {
             let operand = one_value!(values).to_bool();
             Value::Bool(!operand)
+        }
+
+        "and" -> |values| {
+            let (left, right) = two_bools!(values);
+            Value::Bool(left && right)
+        }
+
+        "or" -> |values| {
+            let (left, right) = two_bools!(values);
+            Value::Bool(left || right)
         }
     }
 }

@@ -121,6 +121,8 @@ impl Lexer {
             "match" => Kmatch,
             "true" => Ktrue,
             "false" => Kfalse,
+            "and" => Kand,
+            "or" => Kor,
             _ => Identifier(symbol),
         }
     }
