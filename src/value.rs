@@ -2,8 +2,6 @@ use std::{rc::Rc, collections::HashMap, cell::RefCell};
 
 use crate::expr::Expr;
 
-//   Maybe it's better to use Vec<(String, Value)> 
-// instead of HashMap<String, Value> for Module
 pub type Module = Rc<RefCell<HashMap<String, Value>>>;
 pub type List = Rc<Vec<Value>>;
 pub type Native = fn(&[Value]) -> Value;
@@ -106,6 +104,8 @@ impl std::cmp::PartialEq for Value {
             (Integer(lint), Integer(rint)) => lint == rint,
             (Bool(lbool), Bool(rbool)) => lbool == rbool,
             (List(llist), List(rlist)) => llist == rlist,
+            (Structure(ls), Structure(rs)) => ls == rs,
+            (Unit, Unit) => true,
             (Function(_), Function(_)) => false,
             (Native(_), Native(_)) => false,
             (Module(_), Module(_)) => false,
