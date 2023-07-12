@@ -23,6 +23,8 @@ impl Iterator for Lexer {
             ')' => RParen,
             '[' => LSquare,
             ']' => RSquare,
+            '{' => LCurly,
+            '}' => RCurly,
             '|' => Pipe,
             ',' => Comma,
             #[allow(clippy::suspicious_else_formatting)]
@@ -32,6 +34,7 @@ impl Iterator for Lexer {
             '<' => if self.peek_is('=') { LessEqual } else { Less },
             '>' => if self.peek_is('=') { GreaterEqual } else { Greater },
             ';' => Semicolon,
+            ':' => Colon,
             '.' => Dot,
             '\0' => End,
 

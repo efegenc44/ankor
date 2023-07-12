@@ -1,12 +1,14 @@
-
 use std::{rc::Rc, collections::HashMap, cell::RefCell};
 
 use crate::expr::Expr;
 
+//   Maybe it's better to use Vec<(String, Value)> 
+// instead of HashMap<String, Value> for Module
 pub type Module = Rc<RefCell<HashMap<String, Value>>>;
 pub type List = Rc<Vec<Value>>;
 pub type Native = fn(&[Value]) -> Value;
 pub type Function = Rc<FunctionValue>; 
+pub type Structure = Rc<RefCell<HashMap<String, Value>>>;
 
 pub struct FunctionValue {
     pub args: Vec<String>,
@@ -23,6 +25,7 @@ pub enum Value {
     Native(Native),
     Module(Module),
     List(List),
+    Structure(Structure),
     Unit
 }
 
@@ -52,19 +55,38 @@ impl std::fmt::Display for Value {
             Function(_) => write!(f, "<function>"),
             Native(_) => write!(f, "<native function>"),
             Module(_) => write!(f, "<module>"),
-            List(list) => {
-                match &list[..] {
-                    [] => writeln!(f, "[]"),
-                    [x] => writeln!(f, "[{x}]"),
-                    [x, xs @ .., l] => {
-                        write!(f, "[{x}")?;
-                        for value in xs {
-                            write!(f, ", {value}")?;
-                        }
-                        write!(f, ", {l}]")
+            List(list) => match &list[..] {
+                [] => write!(f, "[]"),
+                [x] => write!(f, "[{x}]"),
+                [x, xs @ .., l] => {
+                    write!(f, "[{x}")?;
+                    for value in xs {
+                        write!(f, ", {value}")?;
                     }
+                    write!(f, ", {l}]")
                 }
-            },
+            }
+            Structure(structure) => {
+                let structure = structure.borrow();
+
+                if structure.is_empty() {
+                    return write!(f, "{{}}")
+                }
+
+                let mut first = true;
+
+                write!(f, "{{")?;
+                for (field_name, value) in structure.iter() {
+                    if first {
+                        first = false;
+                    } else {
+                        write!(f, ",")?;
+                    }
+                    
+                    write!(f, " {field_name}: {value}")?;
+                }
+                write!(f, " }}")
+            }
             Unit => write!(f, "()"),
         }
     }

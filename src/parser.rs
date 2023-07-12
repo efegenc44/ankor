@@ -1,7 +1,9 @@
+use std::collections::HashMap;
+
 use crate::{
     expr::{
         SequenceExpr, ApplicationExpr, Expr, FunctionExpr, LetExpr,
-        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr
+        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr
     },
     token::Token,
 };
@@ -113,6 +115,7 @@ impl Parser {
                 Kmatch => Expr::Match(self.match_expr()),
                 Kimport => Expr::Import(self.import_expr()),
                 LSquare => Expr::List(self.list_expr()),
+                LCurly => Expr::Structure(self.structure_expr()),
                 Bang | Minus => {
                     let op = Expr::Identifier(non_literal.to_string());
                     self.advance();
@@ -218,6 +221,24 @@ impl Parser {
         ListExpr { exprs }
     }
 
+    fn structure_expr(&mut self) -> StructureExpr {
+        use Token::*;
+
+        let fields = self.parse_comma_seperated(LCurly, RCurly, Self::field);
+        
+        StructureExpr { fields }
+    }
+
+    fn field(&mut self) -> (String, Expr) {
+        use Token::*;
+
+        let field_name = self.expect_identifier();
+        self.expect(Colon);
+        let expr = self.expr();
+    
+        (field_name, expr)
+    }
+
     fn match_expr(&mut self) -> MatchExpr {
         use Token::*;
 
@@ -296,11 +317,45 @@ impl Parser {
                         pattern
                     }
                 }
+                LCurly => {
+                    let mut fields = HashMap::new();
+                    self.expect(LCurly);
+                    if !self.optional(RCurly) {
+                        let (field_name, pattern) = self.field_pattern();
+                        fields.insert(field_name, pattern);
+                        while !self.optional(RCurly) {
+                            self.expect(Token::Comma);
+                            let (field_name, pattern) = self.field_pattern();
+                            fields.insert(field_name, pattern);
+                        }
+                    }
+            
+                    let rest = self.optional(Bang)
+                        .then(|| match self.current_token() {
+                            Identifier(ident) => {
+                                let ident = ident.clone();
+                                self.advance();
+                                Some(ident)
+                            }
+                            _ => None,
+                        });
+
+                    Pattern::Structure(fields, rest)
+                }
                 _ => todo!("Error handling")
             }
         };
         self.advance();
         pattern
+    }
+
+    fn field_pattern(&mut self) -> (String, Option<Pattern>) {
+        use Token::*;
+
+        let field_name = self.expect_identifier();
+        let pattern = self.optional(Colon).then(|| self.pattern());
+    
+        (field_name, pattern)
     }
 
     fn expr(&mut self) -> Expr {

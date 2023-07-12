@@ -1,9 +1,9 @@
-use std::rc::Rc;
+use std::{rc::Rc, cell::RefCell};
 
 use crate::{
     expr::{
         AccessExpr, ApplicationExpr, Expr, FunctionExpr, ImportExpr,
-        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr,
+        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr,
     },
     lexer::Lexer, parser::Parser,
     prelude::get_prelude,
@@ -30,10 +30,8 @@ impl Engine {
     }
 
     fn resolve_identifier(&self, ident: &str, module: &Module) -> Value {
-        for (name, value) in self.locals.iter().rev() {
-            if name == ident {
-                return value.clone();
-            }
+        if let Some((_, value)) = self.locals.iter().rev().find(|bind| &bind.0 == ident) {
+            return value.clone();
         }
 
         match module.borrow().get(ident) {
@@ -58,6 +56,7 @@ impl Engine {
             Import(import_expr) => self.evaluate_import_expr(import_expr),
             Access(access_expr) => self.evaluate_access_expr(access_expr, module),
             List(list_expr) => self.evaluate_list_expr(list_expr, module),
+            Structure(structure_expr) => self.evaluate_structure_expr(structure_expr, module),
         }
     }
 
@@ -178,6 +177,49 @@ impl Engine {
                                 .all(|(value, pattern)| self.fits_pattern(value, pattern, local_count))
                 }
             }
+            (Value::Structure(structure), Pattern::Structure(fields, rest)) => {
+                let structure = structure.borrow();
+
+                (match rest {
+                    Some(_) => fields.len() <= structure.len(),
+                    _ => fields.len() == structure.len()
+                }) && if let Some(Some(name)) = rest {
+                    let mut structure = (*structure).clone();
+                    let fits = fields.iter().all(|(field_name, pattern)| {
+                        structure.remove(field_name).is_some_and(|value| {
+                            if let Some(pattern) = pattern {
+                                self.fits_pattern(&value, pattern, local_count)
+                            } else {
+                                self.define_local(field_name.clone(), value);
+                                *local_count += 1;
+                                true
+                            }
+                        })
+                    });
+
+                    if fits {
+                        self.define_local(
+                            name.clone(), 
+                            Value::Structure(Rc::new(RefCell::new(structure)))
+                        );
+                        *local_count += 1;
+                    }
+
+                    fits
+                } else {
+                    fields.iter().all(|(field_name, pattern)| {
+                        structure.get(field_name).is_some_and(|value| { 
+                            if let Some(pattern) = pattern {
+                                self.fits_pattern(value, pattern, local_count)
+                            } else {
+                                self.define_local(field_name.clone(), value.clone());
+                                *local_count += 1;
+                                true
+                            }
+                        })
+                    })
+                }
+            }
             (_, Pattern::Identifier(ident)) => {
                 self.define_local(ident.clone(), value.clone());
                 *local_count += 1;
@@ -206,15 +248,25 @@ impl Engine {
     fn evaluate_access_expr(&mut self, access_expr: &AccessExpr, module: &Module) -> Value {
         let AccessExpr { expr, name } = access_expr;
 
-        let Value::Module(module) = self.evaluate(expr, module) else {
+        let (Value::Module(map) | Value::Structure(map)) = self.evaluate(expr, module) else {
             todo!("Error handling")
         };
-
-        let module = module.borrow();
-        match module.get(name) {
+        
+        let map = map.borrow();
+        match map.get(name) {
             Some(value) => value.clone(),
             None => todo!("Error handling"),
-        }   
+        }
+    }
+
+    fn evaluate_structure_expr(&mut self, structure_expr: &StructureExpr, module: &Module) -> Value {
+        let StructureExpr { fields } = structure_expr;
+
+        let structure = fields
+            .iter()
+            .map(|(field_name, expr)| (field_name.clone(), self.evaluate(expr, module))).collect();
+
+        Value::Structure(Rc::new(RefCell::new(structure)))
     }
 
     pub fn evaluate_module(definitions: &Vec<(String, Expr)>) -> Module {

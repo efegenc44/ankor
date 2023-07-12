@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 #[derive(Clone)]
 pub enum Expr {
     Integer(String),
@@ -11,6 +13,7 @@ pub enum Expr {
     Import(ImportExpr),
     Access(AccessExpr),
     List(ListExpr),
+    Structure(StructureExpr),
     UnitValue
 }
 
@@ -54,6 +57,7 @@ pub enum Pattern {
     Bool(bool),
     List(Vec<Pattern>),
     Rest(Option<String>),
+    Structure(HashMap<String, Option<Pattern>>, Option<Option<String>>),
     Unit
 }
 
@@ -71,4 +75,9 @@ pub struct AccessExpr {
 #[derive(Clone)]
 pub struct ListExpr {
     pub exprs: Vec<Expr>
+}
+
+#[derive(Clone)]
+pub struct StructureExpr {
+    pub fields: Vec<(String, Expr)>
 }

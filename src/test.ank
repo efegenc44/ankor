@@ -13,6 +13,10 @@ b = def() =>
         println(r == [2, true]);
         println(a == 4)
 
-main = def() => 
+c = def() => 
     let [x, y] = [1, 4] in
     println(x + y == 5)
+
+main = def() =>
+    match { x: [{e: 4, f: 5}, false], y: true, abc: true } 
+    | { x: [{ e: 4 } ! r, false, ..f], y } ! => r
