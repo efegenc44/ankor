@@ -3,7 +3,7 @@ use std::{rc::Rc, cell::RefCell};
 use crate::{
     expr::{
         AccessExpr, ApplicationExpr, Expr, FunctionExpr, ImportExpr,
-        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr,
+        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr, AssignmentExpr,
     },
     lexer::Lexer, parser::Parser,
     prelude::get_prelude,
@@ -40,6 +40,17 @@ impl Engine {
         } 
     }
 
+    fn assign(&mut self, ident: &str, value: Value, module: &Module) {
+        if let Some((_, target)) = self.locals.iter_mut().rev().find(|bind| &bind.0 == ident) {
+            return *target = value;
+        }
+
+        match module.borrow_mut().get_mut(ident) {
+            Some(target) => *target = value,
+            None => todo!("Error handling"),
+        } 
+    }
+
     pub fn evaluate(&mut self, expr: &Expr, module: &Module) -> Value {
         use Expr::*;
 
@@ -57,6 +68,7 @@ impl Engine {
             Access(access_expr) => self.evaluate_access_expr(access_expr, module),
             List(list_expr) => self.evaluate_list_expr(list_expr, module),
             Structure(structure_expr) => self.evaluate_structure_expr(structure_expr, module),
+            Assignment(assignment_expr) => self.evaluate_assignment_expr(assignment_expr, module),
         }
     }
 
@@ -268,6 +280,33 @@ impl Engine {
 
         Value::Structure(Rc::new(RefCell::new(structure)))
     }
+
+
+    fn evaluate_assignment_expr(&mut self, assignment_expr: &AssignmentExpr, module: &Module) -> Value {
+        let AssignmentExpr { lhs, rhs } = assignment_expr;
+
+        let rvalue = self.evaluate(rhs, module);
+
+
+        match &**lhs {
+            Expr::Identifier(ident) => self.assign(ident, rvalue, module),
+            Expr::Access(AccessExpr { expr, name }) => {
+                let (Value::Module(map) | Value::Structure(map)) = self.evaluate(expr, module) else {
+                    todo!("Error handling")
+                }; 
+
+                let mut map = map.borrow_mut();
+                match map.get_mut(name) {
+                    Some(target) => *target = rvalue,
+                    None => todo!("Error handling"),
+                }
+            }
+            _ => todo!("Error handling")
+        }
+    
+        Value::Unit
+    }
+
 
     pub fn evaluate_module(definitions: &Vec<(String, Expr)>) -> Module {
         let mut engine = Self::new();

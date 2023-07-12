@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     expr::{
         SequenceExpr, ApplicationExpr, Expr, FunctionExpr, LetExpr,
-        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr
+        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr, AssignmentExpr
     },
     token::Token,
 };
@@ -48,6 +48,21 @@ macro_rules! binary_expr_precedence_level {
                 self.advance();
                 let right = self.$inferior();
                 left = Expr::Sequence(SequenceExpr {
+                    lhs: Box::new(left),
+                    rhs: Box::new(right)
+                })
+            }
+            left
+        }
+    };
+
+    ( $name:ident, $inferior:ident, ASSIGNMENT ) => {
+        fn $name(&mut self) -> Expr {
+            let mut left = self.$inferior();
+            if let Token::Equal = self.current_token() {
+                self.advance();
+                let right = self.$inferior();
+                left = Expr::Assignment(AssignmentExpr {
                     lhs: Box::new(left),
                     rhs: Box::new(right)
                 })
@@ -175,7 +190,8 @@ impl Parser {
     binary_expr_precedence_level!(equality,   comparison, Token::DoubleEqual | Token::BangEqual,     NO_ASSOC);
     binary_expr_precedence_level!(bool_and,   equality,   Token::Kand,                               LEFT_ASSOC);
     binary_expr_precedence_level!(bool_or,    bool_and,   Token::Kor,                                LEFT_ASSOC);
-    binary_expr_precedence_level!(sequence,   bool_or,                                               SEQUENCE);
+    binary_expr_precedence_level!(assignment, bool_or,                                               ASSIGNMENT);
+    binary_expr_precedence_level!(sequence,   assignment,                                            SEQUENCE);
 
     fn let_expr(&mut self) -> LetExpr {
         use Token::*;

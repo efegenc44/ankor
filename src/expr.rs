@@ -14,6 +14,7 @@ pub enum Expr {
     Access(AccessExpr),
     List(ListExpr),
     Structure(StructureExpr),
+    Assignment(AssignmentExpr),
     UnitValue
 }
 
@@ -80,4 +81,10 @@ pub struct ListExpr {
 #[derive(Clone)]
 pub struct StructureExpr {
     pub fields: Vec<(String, Expr)>
+}
+
+#[derive(Clone)]
+pub struct AssignmentExpr {
+    pub lhs: Box<Expr>,
+    pub rhs: Box<Expr>
 }
