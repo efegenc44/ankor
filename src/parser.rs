@@ -10,25 +10,17 @@ use crate::{
 
 macro_rules! binary_expr_precedence_level {
     ( $name:ident, $inferior:ident, $operators:pat, LEFT_ASSOC ) => {
-        fn $name(&mut self) -> Expr {
-            let mut left = self.$inferior();
-            while let current_token @ $operators = self.current_token() {
-                let op = Expr::Identifier(current_token.to_string());
-                self.advance();
-                let right = self.$inferior();
-                left = Expr::Application(ApplicationExpr {
-                    func: Box::new(op),
-                    args: vec![left, right]
-                })
-            }
-            left
-        }
+        binary_expr_precedence_level!($name, $inferior, $operators, while);
     };
-    
+
     ( $name:ident, $inferior:ident, $operators:pat, NO_ASSOC ) => {
+        binary_expr_precedence_level!($name, $inferior, $operators, if);
+    };
+
+    ( $name:ident, $inferior:ident, $operators:pat, $loop:tt ) => {
         fn $name(&mut self) -> Expr {
             let mut left = self.$inferior();
-            if let current_token @ $operators = self.current_token() {
+            $loop let current_token @ $operators = self.current_token() {
                 let op = Expr::Identifier(current_token.to_string());
                 self.advance();
                 let right = self.$inferior();
@@ -41,28 +33,13 @@ macro_rules! binary_expr_precedence_level {
         }
     };
 
-    ( $name:ident, $inferior:ident, SEQUENCE ) => {
+    ( $name:ident, $inferior:ident, $operators:pat, Intrinsic($expr:tt, $exprexpr:ident) ) => {
         fn $name(&mut self) -> Expr {
             let mut left = self.$inferior();
-            while let Token::Semicolon = self.current_token() {
+            while let $operators = self.current_token() {
                 self.advance();
                 let right = self.$inferior();
-                left = Expr::Sequence(SequenceExpr {
-                    lhs: Box::new(left),
-                    rhs: Box::new(right)
-                })
-            }
-            left
-        }
-    };
-
-    ( $name:ident, $inferior:ident, ASSIGNMENT ) => {
-        fn $name(&mut self) -> Expr {
-            let mut left = self.$inferior();
-            if let Token::Equal = self.current_token() {
-                self.advance();
-                let right = self.$inferior();
-                left = Expr::Assignment(AssignmentExpr {
+                left = Expr::$expr($exprexpr {
                     lhs: Box::new(left),
                     rhs: Box::new(right)
                 })
@@ -183,15 +160,15 @@ impl Parser {
         expr
     }
 
-    binary_expr_precedence_level!(term,       call_expr,  Token::Star,                               LEFT_ASSOC);
-    binary_expr_precedence_level!(arithmetic, term,       Token::Plus        | Token::Minus,         LEFT_ASSOC);
+    binary_expr_precedence_level!(term,       call_expr,  Token::Star,                              LEFT_ASSOC);
+    binary_expr_precedence_level!(arithmetic, term,       Token::Plus        | Token::Minus,        LEFT_ASSOC);
     binary_expr_precedence_level!(comparison, arithmetic, Token::Less        | Token::LessEqual |
-                                                          Token::Greater     | Token::GreaterEqual,  NO_ASSOC);
-    binary_expr_precedence_level!(equality,   comparison, Token::DoubleEqual | Token::BangEqual,     NO_ASSOC);
-    binary_expr_precedence_level!(bool_and,   equality,   Token::Kand,                               LEFT_ASSOC);
-    binary_expr_precedence_level!(bool_or,    bool_and,   Token::Kor,                                LEFT_ASSOC);
-    binary_expr_precedence_level!(assignment, bool_or,                                               ASSIGNMENT);
-    binary_expr_precedence_level!(sequence,   assignment,                                            SEQUENCE);
+                                                          Token::Greater     | Token::GreaterEqual, NO_ASSOC);
+    binary_expr_precedence_level!(equality,   comparison, Token::DoubleEqual | Token::BangEqual,    NO_ASSOC);
+    binary_expr_precedence_level!(bool_and,   equality,   Token::Kand,                              LEFT_ASSOC);
+    binary_expr_precedence_level!(bool_or,    bool_and,   Token::Kor,                               LEFT_ASSOC);
+    binary_expr_precedence_level!(assignment, bool_or,    Token::Equal,     Intrinsic(Assignment, AssignmentExpr));
+    binary_expr_precedence_level!(sequence,   assignment, Token::Semicolon, Intrinsic(Sequence,   SequenceExpr));
 
     fn let_expr(&mut self) -> LetExpr {
         use Token::*;
