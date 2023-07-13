@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     expr::{
         SequenceExpr, ApplicationExpr, Expr, FunctionExpr, LetExpr,
-        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr, WhileExpr, BreakExpr, ForExpr
+        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr, WhileExpr, BreakExpr, ForExpr, IfExpr
     },
     token::Token,
 };
@@ -112,6 +112,7 @@ impl Parser {
                 Kmodule => Expr::Module(self.module_expr()),
                 Kwhile => Expr::While(self.while_expr()),
                 Kfor => Expr::For(self.for_expr()),
+                Kif => Expr::If(self.if_expr()),
                 Kreturn => Expr::Return(self.return_expr()),
                 Kbreak => Expr::Break(self.break_expr()),
                 Kcontinue => self.continue_expr(),
@@ -261,7 +262,7 @@ impl Parser {
         self.in_loop += 1;
         
         self.expect(Kfor);
-        let ivar = self.pattern();
+        let patt = self.pattern();
         self.expect(Kin);
         let expr = Box::new(self.expr());
         self.expect(Kdo);
@@ -269,7 +270,20 @@ impl Parser {
         
         self.in_loop -= 1;
         
-        ForExpr { patt: ivar, expr, body }
+        ForExpr { patt, expr, body }
+    }
+
+    fn if_expr(&mut self) -> IfExpr {
+        use Token::*;
+        
+        self.expect(Kif);
+        let cond = Box::new(self.expr());
+        self.expect(Kthen);
+        let truu = Box::new(self.expr());
+        let fals = self.optional(Kelse)
+            .then(|| Box::new(self.expr()));
+        
+        IfExpr { cond, truu, fals }
     }
 
     fn return_expr(&mut self) -> ReturnExpr {

@@ -48,9 +48,17 @@ h = def() =>
     in
         println(x)
 
-main = def() =>
+i = def() =>
     for i in 11 do
         match i 
         | 5  => continue
         | 10 => break i * 9
         | _  => println(i)
+
+main = def() =>
+    let fib = def(n) =>
+        if n <= 2 then 
+            1
+        else
+            fib(n - 1) + fib(n - 2)
+    in fib(25)

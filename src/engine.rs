@@ -3,7 +3,7 @@ use std::{rc::Rc, cell::RefCell};
 use crate::{
     expr::{
         AccessExpr, ApplicationExpr, Expr, FunctionExpr, ImportExpr,
-        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr, WhileExpr, BreakExpr, ForExpr,
+        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr, WhileExpr, BreakExpr, ForExpr, IfExpr,
     },
     lexer::Lexer, parser::Parser,
     prelude::get_prelude,
@@ -87,6 +87,7 @@ impl Engine {
             Assignment(assignment_expr) => self.evaluate_assignment_expr(assignment_expr, module),
             While(while_expr) => self.evaluate_while_expr(while_expr, module),
             For(for_expr) => self.evaluate_for_expr(for_expr, module),
+            If(if_expr) => self.evaluate_if_expr(if_expr, module),
             Return(return_expr) => self.evaluate_return_expr(return_expr, module),
             Break(break_expr) => self.evaluate_break_expr(break_expr, module),
             Continue => self.evaluate_continue_expr(),
@@ -394,6 +395,20 @@ impl Engine {
         }
 
         result
+    }
+
+    fn evaluate_if_expr(&mut self, if_expr: &IfExpr, module: &Module) -> Value {
+        let IfExpr { cond, truu, fals } = if_expr;
+    
+        if self.evaluate(cond, module).to_bool() {
+            self.evaluate(truu, module)
+        } else {
+            if let Some(fals) = fals {
+                self.evaluate(fals, module)
+            } else {
+                Value::Unit
+            }
+        }
     }
 
     fn evaluate_return_expr(&mut self, return_expr: &ReturnExpr, module: &Module) -> Value {

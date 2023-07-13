@@ -18,6 +18,7 @@ pub enum Expr {
     Module(ModuleExpr),
     While(WhileExpr),
     For(ForExpr),
+    If(IfExpr),
     Return(ReturnExpr),
     Break(BreakExpr),
     Continue,
@@ -135,4 +136,11 @@ pub struct ForExpr {
     pub patt: Pattern,
     pub expr: Box<Expr>,
     pub body: Box<Expr>
+}
+
+#[derive(Clone)]
+pub struct IfExpr {
+    pub cond: Box<Expr>,
+    pub truu: Box<Expr>,
+    pub fals: Option<Box<Expr>>
 }
