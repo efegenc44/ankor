@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     expr::{
         SequenceExpr, ApplicationExpr, Expr, FunctionExpr, LetExpr,
-        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr
+        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr, WhileExpr, BreakExpr
     },
     token::Token,
 };
@@ -53,12 +53,13 @@ pub struct Parser {
     tokens: Vec<Token>,
     index: usize,
 
-    in_function: usize
+    in_function: usize,
+    in_loop: usize,
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, index: 0, in_function: 0 }
+        Self { tokens, index: 0, in_function: 0, in_loop: 0 }
     }
 
     fn current_token(&self) -> &Token {
@@ -109,7 +110,10 @@ impl Parser {
                 Kmatch => Expr::Match(self.match_expr()),
                 Kimport => Expr::Import(self.import_expr()),
                 Kmodule => Expr::Module(self.module_expr()),
+                Kwhile => Expr::While(self.while_expr()),
                 Kreturn => Expr::Return(self.return_expr()),
+                Kbreak => Expr::Break(self.break_expr()),
+                Kcontinue => self.continue_expr(),
                 LSquare => Expr::List(self.list_expr()),
                 LCurly => Expr::Structure(self.structure_expr()),
                 Bang | Minus => {
@@ -235,6 +239,21 @@ impl Parser {
         ModuleExpr { definitions }
     }
 
+    fn while_expr(&mut self) -> WhileExpr {
+        use Token::*;
+
+        self.in_loop += 1;
+        
+        self.expect(Kwhile);
+        let cond = Box::new(self.expr());
+        self.expect(Kdo);
+        let body = Box::new(self.expr());
+        
+        self.in_loop -= 1;
+        
+        WhileExpr { cond, body }
+    }
+
     fn return_expr(&mut self) -> ReturnExpr {
         use Token::*;
 
@@ -246,6 +265,31 @@ impl Parser {
         let expr = Box::new(self.expr());
 
         ReturnExpr { expr }
+    }
+
+    fn break_expr(&mut self) -> BreakExpr {
+        use Token::*;
+
+        if self.in_loop == 0 {
+            todo!("Error handling")
+        }
+
+        self.expect(Kbreak);
+        let expr = Box::new(self.expr());
+
+        BreakExpr { expr }
+    }
+
+    fn continue_expr(&mut self) -> Expr {
+        use Token::*;
+
+        if self.in_loop == 0 {
+            todo!("Error handling")
+        }
+
+        self.expect(Kcontinue);
+
+        Expr::Continue
     }
 
     fn structure_expr(&mut self) -> StructureExpr {

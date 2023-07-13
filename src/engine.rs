@@ -3,7 +3,7 @@ use std::{rc::Rc, cell::RefCell};
 use crate::{
     expr::{
         AccessExpr, ApplicationExpr, Expr, FunctionExpr, ImportExpr,
-        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr,
+        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr, WhileExpr, BreakExpr,
     },
     lexer::Lexer, parser::Parser,
     prelude::get_prelude,
@@ -14,11 +14,18 @@ pub struct Engine {
     locals: Vec<(String, Value)>,
 
     return_exception: Option<Value>,
+    break_exception: Option<Value>,
+    continue_exception: bool,
 }
 
 impl Engine {
     pub fn new() -> Self {
-        Self { locals: vec![], return_exception: None }
+        Self { 
+            locals: vec![], 
+            return_exception: None, 
+            break_exception: None, 
+            continue_exception: false 
+        }
     }
 
     fn define_local(&mut self, name: String, value: Value) {
@@ -56,7 +63,10 @@ impl Engine {
     pub fn evaluate(&mut self, expr: &Expr, module: &Module) -> Value {
         use Expr::*;
 
-        if self.return_exception.is_some() {
+        if self.return_exception.is_some() || 
+           self.break_exception.is_some()  || 
+           self.continue_exception 
+        {
             return Value::Unit
         }
         
@@ -75,7 +85,10 @@ impl Engine {
             List(list_expr) => self.evaluate_list_expr(list_expr, module),
             Structure(structure_expr) => self.evaluate_structure_expr(structure_expr, module),
             Assignment(assignment_expr) => self.evaluate_assignment_expr(assignment_expr, module),
+            While(while_expr) => self.evaluate_while_expr(while_expr, module),
             Return(return_expr) => self.evaluate_return_expr(return_expr, module),
+            Break(break_expr) => self.evaluate_break_expr(break_expr, module),
+            Continue => self.evaluate_continue_expr(),
             Module(module_expr) => Self::evaluate_module_expr(module_expr),
         }
     }
@@ -318,12 +331,54 @@ impl Engine {
         Value::Unit
     }
 
+    fn evaluate_while_expr(&mut self, while_expr: &WhileExpr, module: &Module) -> Value {
+        let WhileExpr { cond, body } = while_expr;
+
+        let mut result = Value::Unit;
+        loop {
+            if self.continue_exception {
+                self.continue_exception = false;
+                continue;
+            }
+
+            if let Some(value) = self.break_exception.clone() {
+                self.break_exception = None;
+                result = value;
+                break; 
+            }
+
+            if self.evaluate(cond, module).to_bool() {
+                self.evaluate(body, module);
+            } else {
+                break
+            }
+        }
+
+        result
+    }
+
     fn evaluate_return_expr(&mut self, return_expr: &ReturnExpr, module: &Module) -> Value {
         let ReturnExpr { expr } = return_expr;
 
         let value = self.evaluate(expr, module);
         self.return_exception = Some(value);
 
+        Value::Unit
+    }
+
+
+    fn evaluate_break_expr(&mut self, break_expr: &BreakExpr, module: &Module) -> Value {
+        let BreakExpr { expr } = break_expr;
+
+        let value = self.evaluate(expr, module);
+        self.break_exception = Some(value);
+
+        Value::Unit
+    }
+
+    fn evaluate_continue_expr(&mut self) -> Value {
+        self.continue_exception = true; 
+        
         Value::Unit
     }
 

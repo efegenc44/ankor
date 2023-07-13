@@ -16,7 +16,10 @@ pub enum Expr {
     Structure(StructureExpr),
     Assignment(AssignmentExpr),
     Module(ModuleExpr),
+    While(WhileExpr),
     Return(ReturnExpr),
+    Break(BreakExpr),
+    Continue,
     UnitValue
 }
 
@@ -109,8 +112,19 @@ pub struct AssignmentExpr {
 pub struct ReturnExpr {
     pub expr: Box<Expr>
 }
+#
+[derive(Clone)]
+pub struct BreakExpr {
+    pub expr: Box<Expr>
+}
 
 #[derive(Clone)]
 pub struct ModuleExpr {
     pub definitions: Vec<(String, Expr)>
+}
+
+#[derive(Clone)]
+pub struct WhileExpr {
+    pub cond: Box<Expr>,
+    pub body: Box<Expr>
 }

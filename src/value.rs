@@ -38,7 +38,7 @@ impl Value {
     pub fn to_bool(&self) -> bool {
         match self {
             Self::Bool(bool) => *bool,
-            _ => todo!("Error handling"),
+            _ => todo!("Error handling")
         }
     }
 }

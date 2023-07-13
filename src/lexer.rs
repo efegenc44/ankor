@@ -124,7 +124,11 @@ impl Lexer {
             "and" => Kand,
             "or" => Kor,
             "module" => Kmodule,
+            "while" => Kwhile,
+            "do" => Kdo,
             "return" => Kreturn,
+            "break" => Kbreak,
+            "continue" => Kcontinue,
             _ => Identifier(symbol),
         }
     }

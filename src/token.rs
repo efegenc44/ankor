@@ -37,7 +37,11 @@ pub enum Token {
     Kand,
     Kor,
     Kmodule,
+    Kwhile,
+    Kdo,
     Kreturn,
+    Kbreak,
+    Kcontinue,
 
     End,
 }
@@ -82,7 +86,11 @@ impl std::fmt::Display for Token {
             Kand => write!(f, "and"),
             Kor => write!(f, "or"),
             Kmodule => write!(f, "module"),
+            Kwhile => write!(f, "while"),
+            Kdo => write!(f, "do"),
             Kreturn => write!(f, "return"),
+            Kbreak => write!(f, "break"),
+            Kcontinue => write!(f, "continue"),
             End => write!(f, "END"),
         }
     }
