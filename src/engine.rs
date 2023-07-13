@@ -3,7 +3,7 @@ use std::{rc::Rc, cell::RefCell};
 use crate::{
     expr::{
         AccessExpr, ApplicationExpr, Expr, FunctionExpr, ImportExpr,
-        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr, AssignmentExpr,
+        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern,
     },
     lexer::Lexer, parser::Parser,
     prelude::get_prelude,
@@ -164,32 +164,29 @@ impl Engine {
             (Value::Integer(lint), Pattern::NegativeInteger(rint)) => lint == &-rint.parse::<isize>().unwrap(),
             (Value::Bool(lbool), Pattern::Bool(rbool)) => lbool == rbool,
             (Value::Unit, Pattern::Unit) => true,
-            (Value::List(list), Pattern::List(patterns)) => {
-                match patterns.iter().position(|pattern| matches!(pattern, Pattern::Rest(_))) {
-                    Some(rest_index) => {
-                        let before_rest = &patterns[..rest_index];
-                        let after_rest = &patterns[rest_index + 1..];
-
-                        let result = patterns.len() - 1 <= list.len() &&
+            (Value::List(list), Pattern::List(ListPattern { before_rest, after_rest, rest })) => {
+                match rest {
+                    Some(name) => {
+                        let result = before_rest.len() + after_rest.len() <= list.len() &&
                             std::iter::zip(list.iter(), before_rest)
                                 .all(|(value, pattern)| self.fits_pattern(value, pattern, local_count)) &&
                             std::iter::zip(list.iter().rev(), after_rest.iter().rev())
                                 .all(|(value, pattern)| self.fits_pattern(value, pattern, local_count));
                     
-                        if let Pattern::Rest(Some(name)) = &patterns[rest_index] {
-                            let rest = &list[rest_index..list.len() - after_rest.len()];
+                        if let Some(name) = name {
+                            let rest = &list[before_rest.len()..list.len() - after_rest.len()];
                             self.define_local(name.clone(), Value::List(Rc::new(rest.to_vec())));
                             *local_count += 1;
                         };
 
                         result
                     },
-                    None => list.len() == patterns.len() &&
-                            std::iter::zip(list.iter(), patterns)
+                    None => list.len() == before_rest.len() &&
+                            std::iter::zip(list.iter(), before_rest)
                                 .all(|(value, pattern)| self.fits_pattern(value, pattern, local_count))
                 }
             }
-            (Value::Structure(structure), Pattern::Structure(fields, rest)) => {
+            (Value::Structure(structure), Pattern::Structure(StructurePattern { fields, rest })) => {
                 let structure = structure.borrow();
 
                 (match rest {

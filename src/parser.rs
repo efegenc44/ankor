@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     expr::{
         SequenceExpr, ApplicationExpr, Expr, FunctionExpr, LetExpr,
-        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr, AssignmentExpr
+        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern
     },
     token::Token,
 };
@@ -276,32 +276,6 @@ impl Parser {
             },
 
             non_literal => return match non_literal {
-                LSquare => {
-                    let list_pattern = self.parse_comma_seperated(LSquare, RSquare, Self::pattern);
-
-                    if list_pattern
-                        .iter()
-                        .filter(|pattern| matches!(pattern, Pattern::Rest(_)))
-                        .count() > 1 
-                    {
-                        todo!("Error handling")
-                    }
-
-                    Pattern::List(list_pattern)
-                },
-                Dot => {
-                    self.advance();
-                    self.expect(Dot);
-                    let ident = match self.current_token() {
-                        Identifier(ident) => {
-                            let ident = ident.clone();
-                            self.advance();
-                            Some(ident)
-                        }
-                        _ => None,
-                    };
-                    Pattern::Rest(ident)
-                }
                 LParen => {
                     self.advance();
                     if self.optional(RParen) {
@@ -312,36 +286,105 @@ impl Parser {
                         pattern
                     }
                 }
-                LCurly => {
-                    let mut fields = HashMap::new();
-                    self.expect(LCurly);
-                    if !self.optional(RCurly) {
-                        let (field_name, pattern) = self.field_pattern();
-                        fields.insert(field_name, pattern);
-                        while !self.optional(RCurly) {
-                            self.expect(Token::Comma);
-                            let (field_name, pattern) = self.field_pattern();
-                            fields.insert(field_name, pattern);
-                        }
-                    }
-            
-                    let rest = self.optional(Bang)
-                        .then(|| match self.current_token() {
-                            Identifier(ident) => {
-                                let ident = ident.clone();
-                                self.advance();
-                                Some(ident)
-                            }
-                            _ => None,
-                        });
-
-                    Pattern::Structure(fields, rest)
-                }
+                LSquare => Pattern::List(self.list_pattern()),
+                LCurly => Pattern::Structure(self.structure_pattern()),
                 _ => todo!("Error handling")
             }
         };
         self.advance();
         pattern
+    }
+
+    fn rest_pattern(&mut self) -> Option<String> {
+        use Token::*;
+
+        self.expect(Dot);
+        self.expect(Dot);
+        match self.current_token() {
+            Identifier(ident) => {
+                let ident = ident.clone();
+                self.advance();
+                Some(ident)
+            }
+            _ => None,
+        }
+    }
+
+    fn list_pattern(&mut self) -> ListPattern {
+        use Token::*;
+
+        let mut before_rest = vec![];
+        let mut after_rest = vec![];
+        
+        self.expect(LSquare);
+        if !self.optional(RSquare) {
+            match self.current_token() {
+                Dot => {
+                    let rest = Some(self.rest_pattern());
+                    while !self.optional(RSquare) {
+                        self.expect(Comma);
+                        after_rest.push(self.pattern())
+                    }
+                    return ListPattern { before_rest, after_rest, rest }
+                }
+                _ => before_rest.push(self.pattern())
+            }
+
+            while !self.optional(RSquare) {
+                self.expect(Comma);
+                match self.current_token() {
+                    Dot => {
+                        let rest = Some(self.rest_pattern());
+                        while !self.optional(RSquare) {
+                            self.expect(Comma);
+                            after_rest.push(self.pattern())
+                        }
+                        return ListPattern { before_rest, after_rest, rest }
+                    },
+                    _ => before_rest.push(self.pattern())
+                }
+            }
+        }
+
+        ListPattern { before_rest, after_rest, rest: None }
+    }
+
+    fn structure_pattern(&mut self) -> StructurePattern {
+        use Token::*;
+
+        let mut fields = HashMap::new();
+        
+        self.expect(LCurly);
+        if !self.optional(RCurly) {
+            match self.current_token() {
+                Dot => {
+                    let rest = Some(self.rest_pattern());
+                    self.expect(RCurly);
+                    return StructurePattern { fields, rest }
+                }
+                _ => {
+                    let (field_name, pattern) = self.field_pattern();
+                    fields.insert(field_name, pattern);
+                }
+            }
+
+            while !self.optional(RCurly) {
+                self.expect(Comma);
+                match self.current_token() {
+                    Dot => {
+                        let rest = Some(self.rest_pattern());
+                        self.expect(RCurly);
+                        return StructurePattern { fields, rest }
+                    },
+                    _ => {
+                        let (field_name, pattern) = self.field_pattern();
+                        fields.insert(field_name, pattern);
+                    }
+                }
+            }
+        }
+
+        StructurePattern { fields, rest: None }
     }
 
     fn field_pattern(&mut self) -> (String, Option<Pattern>) {

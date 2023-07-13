@@ -19,4 +19,4 @@ c = def() =>
 
 main = def() =>
     match { x: [{e: 4, f: 5}, false], y: true, abc: true } 
-    | { x: [{ e: 4 } ! r, false, ..f], y } ! => r
+    | { x: [{ e: 4, ..r }, false, ..f], y, .. } => r

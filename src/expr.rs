@@ -56,10 +56,24 @@ pub enum Pattern {
     NonNegativeInteger(String),
     NegativeInteger(String),
     Bool(bool),
-    List(Vec<Pattern>),
-    Rest(Option<String>),
-    Structure(HashMap<String, Option<Pattern>>, Option<Option<String>>),
+    List(ListPattern),
+    Structure(StructurePattern),
     Unit
+}
+
+pub type RestPattern = Option<String>; 
+
+#[derive(Clone, Debug)]
+pub struct ListPattern {
+    pub before_rest: Vec<Pattern>,
+    pub after_rest: Vec<Pattern>,
+    pub rest: Option<RestPattern>
+}
+
+#[derive(Clone, Debug)]
+pub struct StructurePattern {
+    pub fields: HashMap<String, Option<Pattern>>,
+    pub rest: Option<RestPattern>
 }
 
 #[derive(Clone)]
