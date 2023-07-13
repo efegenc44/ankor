@@ -1,6 +1,6 @@
 use std::{rc::Rc, collections::HashMap, cell::RefCell};
 
-use crate::expr::Expr;
+use crate::expr::{Expr, Pattern};
 
 pub type Module = Rc<RefCell<HashMap<String, Value>>>;
 pub type List = Rc<Vec<Value>>;
@@ -9,7 +9,7 @@ pub type Function = Rc<FunctionValue>;
 pub type Structure = Rc<RefCell<HashMap<String, Value>>>;
 
 pub struct FunctionValue {
-    pub args: Vec<String>,
+    pub args: Vec<Pattern>,
     pub expr: Box<Expr>,
     pub clos: Option<Vec<(String, Value)>>,
     pub modl: Module

@@ -129,8 +129,10 @@ impl Engine {
                     })
                     .unwrap_or(0);
 
-                for (arg, value) in std::iter::zip(func.args.clone(), arg_values) {
-                    self.define_local(arg, value);
+                let mut local_count = 0;
+                if !std::iter::zip(func.args.clone(), arg_values)
+                    .all(|(arg, value)| self.fits_pattern(&value, &arg, &mut local_count)) {
+                        todo!("Error handling")
                 }
 
                 let result = self.evaluate(&func.expr, &func.modl);
@@ -168,6 +170,7 @@ impl Engine {
         todo!("Error handling")
     }
 
+    // TODO: Maybe pass value as value rather than reference
     fn fits_pattern(&mut self, value: &Value, pattern: &Pattern, local_count: &mut usize) -> bool {
         match (value, pattern) {
             (Value::Integer(lint), Pattern::NonNegativeInteger(rint)) => lint == &rint.parse::<isize>().unwrap(),

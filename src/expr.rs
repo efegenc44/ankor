@@ -28,7 +28,7 @@ pub struct LetExpr {
 
 #[derive(Clone)]
 pub struct FunctionExpr {
-    pub args: Vec<String>,
+    pub args: Vec<Pattern>,
     pub expr: Box<Expr>,
     pub clos: Option<Vec<String>>
 }

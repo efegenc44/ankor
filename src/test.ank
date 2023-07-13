@@ -27,6 +27,8 @@ e = def() =>
     (return ());
     println(5)
 
+f = def([x, y, ..]) =>
+    [x]
 
 main = def() =>
-    e()
+    f([1, 3, 6])

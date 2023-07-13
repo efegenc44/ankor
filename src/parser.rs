@@ -192,7 +192,7 @@ impl Parser {
         self.in_function += 1;
         
         self.expect(Kdef);
-        let args = self.parse_comma_seperated(LParen, RParen, Self::expect_identifier);
+        let args = self.parse_comma_seperated(LParen, RParen, Self::pattern);
         let clos = matches!(self.current_token(), Pipe)
             .then(|| self.parse_comma_seperated(Pipe, Pipe, Self::expect_identifier));
         self.expect(FatArrow);
