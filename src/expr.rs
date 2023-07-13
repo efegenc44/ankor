@@ -65,6 +65,7 @@ pub enum Pattern {
     Bool(bool),
     List(ListPattern),
     Structure(StructurePattern),
+    Or(OrPattern),
     Unit
 }
 
@@ -81,6 +82,12 @@ pub struct ListPattern {
 pub struct StructurePattern {
     pub fields: HashMap<String, Option<Pattern>>,
     pub rest: Option<RestPattern>
+}
+
+#[derive(Clone, Debug)]
+pub struct OrPattern {
+    pub lhs: Box<Pattern>,
+    pub rhs: Box<Pattern>,
 }
 
 #[derive(Clone)]

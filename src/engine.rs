@@ -3,7 +3,7 @@ use std::{rc::Rc, cell::RefCell};
 use crate::{
     expr::{
         AccessExpr, ApplicationExpr, Expr, FunctionExpr, ImportExpr,
-        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr, WhileExpr, BreakExpr, ForExpr, IfExpr,
+        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr, WhileExpr, BreakExpr, ForExpr, IfExpr, OrPattern,
     },
     lexer::Lexer, parser::Parser,
     prelude::get_prelude,
@@ -256,6 +256,14 @@ impl Engine {
                             }
                         })
                     })
+                }
+            }
+            (_, Pattern::Or(OrPattern { lhs, rhs })) => {
+                let lc = *local_count;
+                self.fits_pattern(value, lhs, local_count) || {
+                    self.remove_local(*local_count);
+                    *local_count = lc; 
+                    self.fits_pattern(value, rhs, local_count)
                 }
             }
             (_, Pattern::Identifier(ident)) => {

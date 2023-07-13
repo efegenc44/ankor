@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     expr::{
         SequenceExpr, ApplicationExpr, Expr, FunctionExpr, LetExpr,
-        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr, WhileExpr, BreakExpr, ForExpr, IfExpr
+        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr, WhileExpr, BreakExpr, ForExpr, IfExpr, OrPattern
     },
     token::Token,
 };
@@ -33,13 +33,13 @@ macro_rules! binary_expr_precedence_level {
         }
     };
 
-    ( $name:ident, $inferior:ident, $operators:pat, Intrinsic($expr:tt, $exprexpr:ident) ) => {
-        fn $name(&mut self) -> Expr {
+    ( $name:ident, $inferior:ident, $operators:pat, Intrinsic($t:ident, $expr:ident, $exprexpr:ident) ) => {
+        fn $name(&mut self) -> $t {
             let mut left = self.$inferior();
             while let $operators = self.current_token() {
                 self.advance();
                 let right = self.$inferior();
-                left = Expr::$expr($exprexpr {
+                left = $t::$expr($exprexpr {
                     lhs: Box::new(left),
                     rhs: Box::new(right)
                 })
@@ -177,8 +177,8 @@ impl Parser {
     binary_expr_precedence_level!(equality,   comparison, Token::DoubleEqual | Token::BangEqual,    NO_ASSOC);
     binary_expr_precedence_level!(bool_and,   equality,   Token::Kand,                              LEFT_ASSOC);
     binary_expr_precedence_level!(bool_or,    bool_and,   Token::Kor,                               LEFT_ASSOC);
-    binary_expr_precedence_level!(assignment, bool_or,    Token::Equal,     Intrinsic(Assignment, AssignmentExpr));
-    binary_expr_precedence_level!(sequence,   assignment, Token::Semicolon, Intrinsic(Sequence,   SequenceExpr));
+    binary_expr_precedence_level!(assignment, bool_or,    Token::Equal,     Intrinsic(Expr, Assignment, AssignmentExpr));
+    binary_expr_precedence_level!(sequence,   assignment, Token::Semicolon, Intrinsic(Expr, Sequence,   SequenceExpr));
 
     fn let_expr(&mut self) -> LetExpr {
         use Token::*;
@@ -367,7 +367,7 @@ impl Parser {
         (pattern, expr)
     }
 
-    fn pattern(&mut self) -> Pattern {
+    fn single_pattern(&mut self) -> Pattern {
         use Token::*;
 
         let pattern = match self.current_token() {
@@ -401,6 +401,12 @@ impl Parser {
         };
         self.advance();
         pattern
+    }
+
+    binary_expr_precedence_level!(or_pattern, single_pattern, Token::Kor, Intrinsic(Pattern, Or, OrPattern));
+
+    fn pattern(&mut self) -> Pattern {
+        self.or_pattern()
     }
 
     fn rest_pattern(&mut self) -> Option<String> {
