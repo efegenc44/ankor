@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     expr::{
         SequenceExpr, ApplicationExpr, Expr, FunctionExpr, LetExpr,
-        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern
+        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr
     },
     token::Token,
 };
@@ -52,11 +52,13 @@ macro_rules! binary_expr_precedence_level {
 pub struct Parser {
     tokens: Vec<Token>,
     index: usize,
+
+    in_function: usize
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, index: 0 }
+        Self { tokens, index: 0, in_function: 0 }
     }
 
     fn current_token(&self) -> &Token {
@@ -106,6 +108,7 @@ impl Parser {
                 Kdef => Expr::Function(self.function_expr()),
                 Kmatch => Expr::Match(self.match_expr()),
                 Kimport => Expr::Import(self.import_expr()),
+                Kreturn => Expr::Return(self.return_expr()),
                 LSquare => Expr::List(self.list_expr()),
                 LCurly => Expr::Structure(self.structure_expr()),
                 Bang | Minus => {
@@ -186,13 +189,17 @@ impl Parser {
     fn function_expr(&mut self) -> FunctionExpr {
         use Token::*;
 
+        self.in_function += 1;
+        
         self.expect(Kdef);
         let args = self.parse_comma_seperated(LParen, RParen, Self::expect_identifier);
         let clos = matches!(self.current_token(), Pipe)
             .then(|| self.parse_comma_seperated(Pipe, Pipe, Self::expect_identifier));
         self.expect(FatArrow);
         let expr = Box::new(self.expr());
-
+    
+        self.in_function -= 1;
+        
         FunctionExpr { args, expr, clos }
     }
 
@@ -214,6 +221,19 @@ impl Parser {
         let exprs = self.parse_comma_seperated(LSquare, RSquare, Self::expr);
 
         ListExpr { exprs }
+    }
+
+    fn return_expr(&mut self) -> ReturnExpr {
+        use Token::*;
+
+        if self.in_function == 0 {
+            todo!("Error handling")
+        }
+
+        self.expect(Kreturn);
+        let expr = Box::new(self.expr());
+
+        ReturnExpr { expr }
     }
 
     fn structure_expr(&mut self) -> StructureExpr {

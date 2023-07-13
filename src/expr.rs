@@ -15,6 +15,7 @@ pub enum Expr {
     List(ListExpr),
     Structure(StructureExpr),
     Assignment(AssignmentExpr),
+    Return(ReturnExpr),
     UnitValue
 }
 
@@ -101,4 +102,9 @@ pub struct StructureExpr {
 pub struct AssignmentExpr {
     pub lhs: Box<Expr>,
     pub rhs: Box<Expr>
+}
+
+#[derive(Clone)]
+pub struct ReturnExpr {
+    pub expr: Box<Expr>
 }

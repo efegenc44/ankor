@@ -36,6 +36,7 @@ pub enum Token {
     Kfalse,
     Kand,
     Kor,
+    Kreturn,
 
     End,
 }
@@ -79,6 +80,7 @@ impl std::fmt::Display for Token {
             Kfalse => write!(f, "false"),
             Kand => write!(f, "and"),
             Kor => write!(f, "or"),
+            Kreturn => write!(f, "return"),
             End => write!(f, "END"),
         }
     }

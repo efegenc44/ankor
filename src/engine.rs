@@ -3,7 +3,7 @@ use std::{rc::Rc, cell::RefCell};
 use crate::{
     expr::{
         AccessExpr, ApplicationExpr, Expr, FunctionExpr, ImportExpr,
-        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern,
+        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr,
     },
     lexer::Lexer, parser::Parser,
     prelude::get_prelude,
@@ -12,11 +12,13 @@ use crate::{
 
 pub struct Engine {
     locals: Vec<(String, Value)>,
+
+    return_exception: Option<Value>,
 }
 
 impl Engine {
     pub fn new() -> Self {
-        Self { locals: vec![] }
+        Self { locals: vec![], return_exception: None }
     }
 
     fn define_local(&mut self, name: String, value: Value) {
@@ -54,6 +56,10 @@ impl Engine {
     pub fn evaluate(&mut self, expr: &Expr, module: &Module) -> Value {
         use Expr::*;
 
+        if self.return_exception.is_some() {
+            return Value::Unit
+        }
+        
         match expr {
             Integer(int) => Value::Integer(int.parse().unwrap()),
             Bool(bool) => Value::Bool(*bool),
@@ -69,6 +75,7 @@ impl Engine {
             List(list_expr) => self.evaluate_list_expr(list_expr, module),
             Structure(structure_expr) => self.evaluate_structure_expr(structure_expr, module),
             Assignment(assignment_expr) => self.evaluate_assignment_expr(assignment_expr, module),
+            Return(return_expr) => self.evaluate_return_expr(return_expr, module),
         }
     }
 
@@ -128,6 +135,9 @@ impl Engine {
 
                 let result = self.evaluate(&func.expr, &func.modl);
                 self.remove_local(args.len() + clos_count);
+
+                let result = self.return_exception.clone().unwrap_or(result);
+                self.return_exception = None;
                 result
             },
             _ => todo!("Error handling")
@@ -304,6 +314,14 @@ impl Engine {
         Value::Unit
     }
 
+    fn evaluate_return_expr(&mut self, return_expr: &ReturnExpr, module: &Module) -> Value {
+        let ReturnExpr { expr } = return_expr;
+
+        let value = self.evaluate(expr, module);
+        self.return_exception = Some(value);
+
+        Value::Unit
+    }
 
     pub fn evaluate_module(definitions: &Vec<(String, Expr)>) -> Module {
         let mut engine = Self::new();

@@ -123,6 +123,7 @@ impl Lexer {
             "false" => Kfalse,
             "and" => Kand,
             "or" => Kor,
+            "return" => Kreturn,
             _ => Identifier(symbol),
         }
     }

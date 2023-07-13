@@ -17,6 +17,16 @@ c = def() =>
     let [x, y] = [1, 4] in
     println(x + y == 5)
 
-main = def() =>
+d = def() =>
     match { x: [{e: 4, f: 5}, false], y: true, abc: true } 
     | { x: [{ e: 4, ..r }, false, ..f], y, .. } => r
+
+
+e = def() =>
+    println(3);
+    (return ());
+    println(5)
+
+
+main = def() =>
+    e()
