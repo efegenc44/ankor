@@ -15,6 +15,7 @@ pub enum Expr {
     List(ListExpr),
     Structure(StructureExpr),
     Assignment(AssignmentExpr),
+    Module(ModuleExpr),
     Return(ReturnExpr),
     UnitValue
 }
@@ -107,4 +108,9 @@ pub struct AssignmentExpr {
 #[derive(Clone)]
 pub struct ReturnExpr {
     pub expr: Box<Expr>
+}
+
+#[derive(Clone)]
+pub struct ModuleExpr {
+    pub definitions: Vec<(String, Expr)>
 }

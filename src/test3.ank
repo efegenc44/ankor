@@ -1,0 +1,10 @@
+Vector2 = module (
+    New = def(x, y) =>
+        { x: x, y: y } 
+
+    Add = def(
+        { x: x1, y: y1, .. },
+        { x: x2, y: y2, .. }
+    ) => 
+        New(x1 + x2, y1 + y2)
+)

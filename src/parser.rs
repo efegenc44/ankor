@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     expr::{
         SequenceExpr, ApplicationExpr, Expr, FunctionExpr, LetExpr,
-        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr
+        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr
     },
     token::Token,
 };
@@ -108,6 +108,7 @@ impl Parser {
                 Kdef => Expr::Function(self.function_expr()),
                 Kmatch => Expr::Match(self.match_expr()),
                 Kimport => Expr::Import(self.import_expr()),
+                Kmodule => Expr::Module(self.module_expr()),
                 Kreturn => Expr::Return(self.return_expr()),
                 LSquare => Expr::List(self.list_expr()),
                 LCurly => Expr::Structure(self.structure_expr()),
@@ -221,6 +222,17 @@ impl Parser {
         let exprs = self.parse_comma_seperated(LSquare, RSquare, Self::expr);
 
         ListExpr { exprs }
+    }
+
+    fn module_expr(&mut self) -> ModuleExpr {
+        use Token::*;
+
+        self.expect(Kmodule);
+        self.expect(LParen);
+        let definitions = self.parse_module();
+        self.expect(RParen);
+
+        ModuleExpr { definitions }
     }
 
     fn return_expr(&mut self) -> ReturnExpr {

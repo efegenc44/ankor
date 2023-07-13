@@ -3,7 +3,7 @@ use std::{rc::Rc, cell::RefCell};
 use crate::{
     expr::{
         AccessExpr, ApplicationExpr, Expr, FunctionExpr, ImportExpr,
-        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr,
+        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr,
     },
     lexer::Lexer, parser::Parser,
     prelude::get_prelude,
@@ -76,6 +76,7 @@ impl Engine {
             Structure(structure_expr) => self.evaluate_structure_expr(structure_expr, module),
             Assignment(assignment_expr) => self.evaluate_assignment_expr(assignment_expr, module),
             Return(return_expr) => self.evaluate_return_expr(return_expr, module),
+            Module(module_expr) => Self::evaluate_module_expr(module_expr),
         }
     }
 
@@ -324,6 +325,14 @@ impl Engine {
         self.return_exception = Some(value);
 
         Value::Unit
+    }
+
+    fn evaluate_module_expr(module_expr: &ModuleExpr) -> Value {
+        let ModuleExpr { definitions } = module_expr;
+        
+        let module = Self::evaluate_module(definitions);
+
+        Value::Module(module)
     }
 
     pub fn evaluate_module(definitions: &Vec<(String, Expr)>) -> Module {
