@@ -125,6 +125,7 @@ impl Lexer {
             "or" => Kor,
             "module" => Kmodule,
             "while" => Kwhile,
+            "for" => Kfor,
             "do" => Kdo,
             "return" => Kreturn,
             "break" => Kbreak,

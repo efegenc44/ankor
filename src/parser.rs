@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     expr::{
         SequenceExpr, ApplicationExpr, Expr, FunctionExpr, LetExpr,
-        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr, WhileExpr, BreakExpr
+        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr, WhileExpr, BreakExpr, ForExpr
     },
     token::Token,
 };
@@ -111,6 +111,7 @@ impl Parser {
                 Kimport => Expr::Import(self.import_expr()),
                 Kmodule => Expr::Module(self.module_expr()),
                 Kwhile => Expr::While(self.while_expr()),
+                Kfor => Expr::For(self.for_expr()),
                 Kreturn => Expr::Return(self.return_expr()),
                 Kbreak => Expr::Break(self.break_expr()),
                 Kcontinue => self.continue_expr(),
@@ -252,6 +253,23 @@ impl Parser {
         self.in_loop -= 1;
         
         WhileExpr { cond, body }
+    }
+
+    fn for_expr(&mut self) -> ForExpr {
+        use Token::*;
+
+        self.in_loop += 1;
+        
+        self.expect(Kfor);
+        let ivar = self.pattern();
+        self.expect(Kin);
+        let expr = Box::new(self.expr());
+        self.expect(Kdo);
+        let body = Box::new(self.expr());
+        
+        self.in_loop -= 1;
+        
+        ForExpr { patt: ivar, expr, body }
     }
 
     fn return_expr(&mut self) -> ReturnExpr {

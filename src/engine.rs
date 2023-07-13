@@ -3,7 +3,7 @@ use std::{rc::Rc, cell::RefCell};
 use crate::{
     expr::{
         AccessExpr, ApplicationExpr, Expr, FunctionExpr, ImportExpr,
-        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr, WhileExpr, BreakExpr,
+        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr, WhileExpr, BreakExpr, ForExpr,
     },
     lexer::Lexer, parser::Parser,
     prelude::get_prelude,
@@ -86,6 +86,7 @@ impl Engine {
             Structure(structure_expr) => self.evaluate_structure_expr(structure_expr, module),
             Assignment(assignment_expr) => self.evaluate_assignment_expr(assignment_expr, module),
             While(while_expr) => self.evaluate_while_expr(while_expr, module),
+            For(for_expr) => self.evaluate_for_expr(for_expr, module),
             Return(return_expr) => self.evaluate_return_expr(return_expr, module),
             Break(break_expr) => self.evaluate_break_expr(break_expr, module),
             Continue => self.evaluate_continue_expr(),
@@ -338,7 +339,6 @@ impl Engine {
         loop {
             if self.continue_exception {
                 self.continue_exception = false;
-                continue;
             }
 
             if let Some(value) = self.break_exception.clone() {
@@ -351,6 +351,45 @@ impl Engine {
                 self.evaluate(body, module);
             } else {
                 break
+            }
+        }
+
+        result
+    }
+
+    fn evaluate_for_expr(&mut self, for_expr: &ForExpr, module: &Module) -> Value {
+        let ForExpr { patt, expr, body } = for_expr;
+
+        let mut result = Value::Unit;
+
+        let mut iter: Box<dyn Iterator<Item = Value>> = match self.evaluate(expr, module) {
+            Value::Integer(int) => Box::new((0..int).into_iter().map(|n| Value::Integer(n))),
+            Value::List(list) => {
+                let len = list.len();
+                Box::new((0..len).map(move |i| list[i].clone()))
+            },
+            _ => todo!("Error handling")
+        };
+    
+        loop {
+            if self.continue_exception {
+                self.continue_exception = false;
+            }
+
+            if let Some(value) = self.break_exception.clone() {
+                self.break_exception = None;
+                result = value;
+                break; 
+            }
+
+            let mut local_count = 0;
+            match iter.next() {
+                Some(value) => {
+                    self.fits_pattern(&value, patt, &mut local_count);
+                    self.evaluate(body, module);
+                    self.remove_local(local_count)
+                }
+                None => break,
             }
         }
 
