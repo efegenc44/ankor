@@ -122,17 +122,18 @@ impl Lexer {
     }
 
     fn lex_number(&mut self) -> Token {
-        let start = self.index;
+        let mut number = String::new();
 
-        while let '0'..='9' = self.current_char() {
+        while let '0'..='9' | '_' = self.current_char() {
+            if let digit @ '0'..='9' = self.current_char() {
+                number.push(*digit);
+            }
             self.advance();
         }
 
         if Self::valid_symbol_character(self.current_char()) {
             todo!("Error handling");
         }
-
-        let number = self.chars[start..self.index].iter().collect();
 
         Token::Integer(number)
     }
