@@ -2,6 +2,7 @@
 pub enum Token {
     Integer(String),
     Identifier(String),
+    String(String),
 
     Plus,
     Minus,
@@ -57,6 +58,7 @@ impl std::fmt::Display for Token {
         match self {
             Integer(int) => write!(f, "{int}"),
             Identifier(ident) => write!(f, "{ident}"),
+            String(string) => write!(f, "\"{string}\""),
             Plus => write!(f, "+"),
             Minus => write!(f, "-"),
             Star => write!(f, "*"),

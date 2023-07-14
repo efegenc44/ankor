@@ -3,6 +3,7 @@ use std::collections::HashMap;
 #[derive(Clone)]
 pub enum Expr {
     Integer(String),
+    String(String),
     Bool(bool),
     Identifier(String),
     Let(LetExpr),

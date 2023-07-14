@@ -43,6 +43,9 @@ impl Iterator for Lexer {
                     self.advance();
                     self.next()
                 }
+                '"' => {
+                    Some(self.lex_string())
+                }
                 '0'..='9' => {
                     Some(self.lex_number())
                 }
@@ -84,9 +87,41 @@ impl Lexer {
         }
     }
 
-    fn lex_number(&mut self) -> Token {
-        use Token::*;
+    fn lex_string(&mut self) -> Token {
+        let mut string = String::new();
 
+        self.advance();
+        while self.current_char() != &'"' && self.current_char() != &'\0' {
+            let ch = match self.current_char() {
+                '\\' => {
+                    self.advance();
+                    match self.current_char() {
+                        'n'  => '\n',
+                        'r'  => '\r',
+                        't'  => '\t',
+                        '0'  => '\0',
+                        '\\' => '\\',
+                        '\"' => '\"',
+                        // '\0' => todo!("Error handling")
+                        _    => todo!("Error handling")
+                    }
+                },
+                ch => *ch
+            };
+            string.push(ch);
+            self.advance();
+        }
+
+        if self.current_char() == &'\0' {
+            todo!("Error handling")
+        }
+
+        self.advance();
+
+        Token::String(string)
+    }
+
+    fn lex_number(&mut self) -> Token {
         let start = self.index;
 
         while let '0'..='9' = self.current_char() {
@@ -99,7 +134,7 @@ impl Lexer {
 
         let number = self.chars[start..self.index].iter().collect();
 
-        Integer(number)
+        Token::Integer(number)
     }
 
     fn lex_symbol(&mut self) -> Token {
@@ -111,7 +146,9 @@ impl Lexer {
             self.advance();
         }
 
-        let symbol = self.chars[start..self.index].iter().collect::<String>();
+        let symbol = self.chars[start..self.index]
+            .iter()
+            .collect::<std::string::String>();
 
         match symbol.as_str() {
             "import" => Kimport,

@@ -18,6 +18,7 @@ pub struct FunctionValue {
 #[derive(Clone)]
 pub enum Value {
     Integer(isize),
+    String(String),
     Bool(bool),
     Function(Function),
     Native(Native),
@@ -49,6 +50,7 @@ impl std::fmt::Display for Value {
 
         match self {
             Integer(int) => write!(f, "{int}"),
+            String(string) => write!(f, "{string}"),
             Bool(bool) => write!(f, "{bool}"),
             Function(_) => write!(f, "<function>"),
             Native(_) => write!(f, "<native function>"),

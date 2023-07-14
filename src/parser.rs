@@ -100,6 +100,7 @@ impl Parser {
 
         let expr = match self.current_token() {
             Identifier(symbol) => Expr::Identifier(symbol.clone()),
+            String(string) => Expr::String(string.clone()),
             Integer(int) => Expr::Integer(int.clone()),
             Ktrue => Expr::Bool(true),
             Kfalse => Expr::Bool(false),

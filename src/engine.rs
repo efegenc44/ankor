@@ -72,6 +72,7 @@ impl Engine {
         
         match expr {
             Integer(int) => Value::Integer(int.parse().unwrap()),
+            String(string) => Value::String(string.clone()),
             Bool(bool) => Value::Bool(*bool),
             UnitValue => Value::Unit,
             Identifier(ident) => self.resolve_identifier(ident, module),
