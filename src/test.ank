@@ -67,5 +67,8 @@ k = def() =>
     match 4
     | 3 or 4 => true
 
-main = def([x, y, ..]) =>
+l = def([x, y, ..]) =>
     println(x, y)
+
+main = def() =>
+    fac(186)

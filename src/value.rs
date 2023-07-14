@@ -1,5 +1,7 @@
 use std::{rc::Rc, collections::HashMap, cell::RefCell};
 
+use apnum::BigInt;
+
 use crate::expr::{Expr, Pattern};
 
 pub type Module = Rc<RefCell<HashMap<String, Value>>>;
@@ -8,6 +10,7 @@ pub type Native = fn(&[Value]) -> Value;
 pub type Function = Rc<FunctionValue>; 
 pub type Structure = Rc<RefCell<HashMap<String, Value>>>;
 pub type Float = f64;
+pub type Integer = i32;
 
 pub struct FunctionValue {
     pub args: Vec<Pattern>,
@@ -18,7 +21,8 @@ pub struct FunctionValue {
 
 #[derive(Clone)]
 pub enum Value {
-    Integer(isize),
+    Integer(Integer),
+    BigInteger(BigInt),
     Float(Float),
     String(String),
     Bool(bool),
@@ -45,6 +49,7 @@ impl std::fmt::Display for Value {
 
         match self {
             Integer(int) => write!(f, "{int}"),
+            BigInteger(bigint) => write!(f, "{bigint}"),
             Float(float) => write!(f, "{float}"),
             String(string) => write!(f, "{string}"),
             Bool(bool) => write!(f, "{bool}"),
@@ -94,12 +99,17 @@ impl std::fmt::Debug for Value {
     }
 }
 
+impl std::cmp::Eq for Value {}
+
 impl std::cmp::PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         use Value::*;
 
         match (self, other) {
             (Integer(lint), Integer(rint)) => lint == rint,
+            (BigInteger(lbigint), BigInteger(rbigint)) => lbigint == rbigint,
+            (BigInteger(bigint), Integer(int)) => bigint.eq_i32(*int),
+            (Integer(int), BigInteger(bigint)) => bigint.eq_i32(*int),
             (Float(lfloat), Float(rfloat)) => lfloat == rfloat,
             (String(lstring), String(rstring)) => lstring == rstring,
             (Bool(lbool), Bool(rbool)) => lbool == rbool,
@@ -112,4 +122,159 @@ impl std::cmp::PartialEq for Value {
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }
     }
-} 
+}
+
+impl std::cmp::PartialOrd for Value {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl std::cmp::Ord for Value {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use Value::*;
+
+        match (self, other) {
+            (Integer(lint), Integer(rint)) => lint.cmp(rint),
+            (BigInteger(lbigint), BigInteger(rbigint)) => lbigint.cmp(rbigint),
+            (BigInteger(bigint), Integer(int)) => bigint.cmp_i32(*int),
+            (Integer(int), BigInteger(bigint)) => bigint.cmp_i32(*int).reverse(),
+            (Float(lfloat), Float(rfloat)) => lfloat.total_cmp(rfloat),
+            _ => todo!("Error handling")
+        }
+    }
+}
+
+impl std::ops::Add for &Value {
+    type Output = Value;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        use Value::*;
+
+        match (self, rhs) {
+            (Integer(lint), Integer(rint)) => match lint.checked_add(*rint) {
+                Some(int) => Integer(int),
+                None => BigInteger(BigInt::from(*lint) + *rint),
+            },
+            (BigInteger(lbigint), BigInteger(rbigint)) => BigInteger(lbigint + rbigint),
+            (BigInteger(bigint), Integer(int)) => BigInteger(bigint + *int),
+            (Integer(int), BigInteger(bigint)) => BigInteger(*int + bigint),
+            (Float(lfloat), Float(rfloat)) => Float(lfloat + rfloat),
+            _ => todo!("Error handling")
+        }
+    }
+}
+
+impl std::ops::Sub for &Value {
+    type Output = Value;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        use Value::*;
+
+        match (self, rhs) {
+            (Integer(lint), Integer(rint)) => match lint.checked_sub(*rint) {
+                Some(int) => Integer(int),
+                None => BigInteger(BigInt::from(*lint) - *rint),
+            },
+            (BigInteger(lbigint), BigInteger(rbigint)) => BigInteger(lbigint - rbigint),
+            (BigInteger(bigint), Integer(int)) => BigInteger(bigint - *int),
+            (Integer(int), BigInteger(bigint)) => BigInteger(*int - bigint),
+            (Float(lfloat), Float(rfloat)) => Float(lfloat - rfloat),
+            _ => todo!("Error handling")
+        }
+    }
+}
+
+impl std::ops::Mul for &Value {
+    type Output = Value;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        use Value::*;
+
+        match (self, rhs) {
+            (Integer(lint), Integer(rint)) => match lint.checked_mul(*rint) {
+                Some(int) => Integer(int),
+                None => BigInteger(BigInt::from(*lint) * *rint),
+            },
+            (BigInteger(lbigint), BigInteger(rbigint)) => BigInteger(lbigint * rbigint),
+            (BigInteger(bigint), Integer(int)) => BigInteger(bigint * *int),
+            (Integer(int), BigInteger(bigint)) => BigInteger(*int * bigint),
+            (Float(lfloat), Float(rfloat)) => Float(lfloat * rfloat),
+            _ => todo!("Error handling")
+        }
+    }
+}
+
+impl std::ops::Div for &Value {
+    type Output = Value;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        use Value::*;
+
+        match (self, rhs) {
+            (Integer(lint), Integer(rint)) => match lint.checked_div(*rint) {
+                Some(int) => Integer(int),
+                None => BigInteger((BigInt::from(*lint) / *rint).0),
+            },
+            (BigInteger(lbigint), BigInteger(rbigint)) => BigInteger((lbigint / rbigint).0),
+            (BigInteger(bigint), Integer(int)) => BigInteger((bigint / *int).0),
+            (Integer(int), BigInteger(bigint)) => BigInteger((&BigInt::from(*int) / bigint).0),
+            (Float(lfloat), Float(rfloat)) => Float(lfloat / rfloat),
+            _ => todo!("Error handling")
+        }
+    }
+}
+
+impl std::ops::BitAnd for &Value {
+    type Output = Value;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        use Value::*;
+
+        match (self, rhs) {
+            (Bool(lbool), Bool(rbool)) => Bool(lbool & rbool),
+            _ => todo!("Error handling")
+        }
+    }
+}
+
+impl std::ops::BitOr for &Value {
+    type Output = Value;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        use Value::*;
+
+        match (self, rhs) {
+            (Bool(lbool), Bool(rbool)) => Bool(lbool | rbool),
+            _ => todo!("Error handling")
+        }
+    }
+}
+
+impl std::ops::Neg for &Value {
+    type Output = Value;
+
+    fn neg(self) -> Self::Output {
+        use Value::*;
+
+        match self {
+            Integer(int) => Integer(-int),
+            BigInteger(bigint) => BigInteger(-bigint),
+            Float(float) => Float(-float),
+            _ => todo!("Error handling")
+        }
+    }
+}
+
+impl std::ops::Not for &Value {
+    type Output = Value;
+
+    fn not(self) -> Self::Output {
+        use Value::*;
+
+        match self {
+            Bool(bool) => Bool(!bool),
+            _ => todo!("Error handling")
+        }
+    }
+}

@@ -5,3 +5,11 @@ version = 3
 [[package]]
 name = "ankor"
 version = "0.1.0"
+dependencies = [
+ "apnum",
+]
+
+[[package]]
+name = "apnum"
+version = "0.1.0"
+source = "git+https://github.com/efegenc44/apnum.git#a5248dcbd2a09b3faba5cc705aed4ee596d502b7"

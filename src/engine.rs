@@ -1,5 +1,7 @@
 use std::{rc::Rc, cell::RefCell};
 
+use apnum::BigInt;
+
 use crate::{
     expr::{
         AccessExpr, ApplicationExpr, Expr, FunctionExpr, ImportExpr,
@@ -60,6 +62,13 @@ impl Engine {
         } 
     }
 
+    fn parse_integer(number: &str) -> Value {
+        match number.parse() {
+            Ok(number) => Value::Integer(number),
+            Err(_) => Value::BigInteger(BigInt::try_from(number).unwrap()),
+        }
+    }
+
     pub fn evaluate(&mut self, expr: &Expr, module: &Module) -> Value {
         use Expr::*;
 
@@ -71,7 +80,7 @@ impl Engine {
         }
         
         match expr {
-            Integer(int) => Value::Integer(int.parse().unwrap()),
+            Integer(int) => Self::parse_integer(int),
             Float(float) => Value::Float(float.parse().unwrap()),
             String(string) => Value::String(string.clone()),
             Bool(bool) => Value::Bool(*bool),
@@ -192,8 +201,8 @@ impl Engine {
     fn fits_pattern(&mut self, value: &Value, pattern: &Pattern, local_count: &mut usize) -> bool {
         match (value, pattern) {
             (Value::String(lstring), Pattern::String(rstring)) => lstring == rstring,
-            (Value::Integer(lint), Pattern::NonNegativeInteger(rint)) => lint == &rint.parse::<isize>().unwrap(),
-            (Value::Integer(lint), Pattern::NegativeInteger(rint)) => lint == &-rint.parse::<isize>().unwrap(),
+            (Value::Integer(_) | Value::BigInteger(_), Pattern::NonNegativeInteger(rint)) => value == &Self::parse_integer(rint),
+            (Value::Integer(_) | Value::BigInteger(_), Pattern::NegativeInteger(rint)) => value == &-&Self::parse_integer(rint),
             (Value::Float(lfloat), Pattern::NonNegativeFloat(rfloat)) => lfloat == &rfloat.parse::<value::Float>().unwrap(),
             (Value::Float(lfloat), Pattern::NegativeFloat(rfloat)) => lfloat == &-rfloat.parse::<value::Float>().unwrap(),
             (Value::Bool(lbool), Pattern::Bool(rbool)) => lbool == rbool,

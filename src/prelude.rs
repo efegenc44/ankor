@@ -11,14 +11,14 @@ macro_rules! env {
 macro_rules! two_values {
     ($values:ident) => {{
         let [left, right] = $values else { 
-            unreachable!() 
+            todo!("Error handling")
         };
         (left, right)
     }};
 
     ($values:ident, $method:ident) => {{
         let [left, right] = $values else { 
-            unreachable!() 
+            todo!("Error handling")
         };
         (left.$method(), right.$method())
     }};
@@ -27,30 +27,33 @@ macro_rules! two_values {
 macro_rules! one_value {
     ($values:ident) => {{
         let [left] = $values else { 
-            unreachable!() 
+            todo!("Error handling")
         };
         left
     }};
 }
 
-macro_rules! arithmetic {
-    ($values:ident, $op:tt) => {
-        match two_values!($values) {
-            (Value::Integer(lint), Value::Integer(rint)) => Value::Integer(lint $op rint),
-            (Value::Float(lfloat), Value::Float(rfloat)) => Value::Float(lfloat $op rfloat),
-            _ => todo!("Error handling")
-        }
-    };
+macro_rules! unary {
+    ($values:ident, $op:tt) => {{
+        let [left] = $values else { 
+            unreachable!() 
+        };
+        $op left
+    }};
+}
+
+macro_rules! binary {
+    ($values:ident, $op:tt) => {{
+        let (left, right) = two_values!($values);
+        left $op right
+    }};
 }
 
 macro_rules! comparison {
-    ($values:ident, $op:tt) => {
-        match two_values!($values) {
-            (Value::Integer(lint), Value::Integer(rint)) => Value::Bool(lint $op rint),
-            (Value::Float(lfloat), Value::Float(rfloat)) => Value::Bool(lfloat $op rfloat),
-            _ => todo!("Error handling")
-        }
-    };
+    ($values:ident, $op:tt) => {{
+        let (left, right) = two_values!($values);
+        Value::Bool(left $op right)
+    }};
 }
 
 fn prelude() -> HashMap<String, Value> {
@@ -69,52 +72,26 @@ fn prelude() -> HashMap<String, Value> {
             Value::Unit
         }
 
-        "+" -> |values| arithmetic!(values, +)
-        "*" -> |values| arithmetic!(values, *)
-        "/" -> |values| arithmetic!(values, /)
-        "-" -> |values| {
-            use Value::*;
-
-            match values {
-                [operand] => match operand {
-                    Integer(int) => Integer(-int),
-                    Float(float) => Float(-float),
-                    _ => todo!("Error handling")
-                },
-                [_, _] => arithmetic!(values, -),
-                _ => unreachable!()
-            }
+        "+" -> |values| binary!(values, +)
+        "*" -> |values| binary!(values, *)
+        "/" -> |values| binary!(values, /)
+        "-" -> |values| match values {
+            [operand] => !operand,
+            [_, _]    => binary!(values, -),
+            _ => unreachable!()
         }
+
+        "and" -> |values| binary!(values, &)
+        "or"  -> |values| binary!(values, -)
+
+        "!" -> |values| unary!(values, !)
 
         "<"  -> |values| comparison!(values, <)
         "<=" -> |values| comparison!(values, <=)
         ">"  -> |values| comparison!(values, >)
         ">=" -> |values| comparison!(values, >=)
-
-        "==" -> |values| {
-            let (left, right) = two_values!(values);
-            Value::Bool(left == right)
-        }
-
-        "!=" -> |values| {
-            let (left, right) = two_values!(values);
-            Value::Bool(left != right)
-        }
-
-        "!" -> |values| {
-            let operand = one_value!(values).to_bool();
-            Value::Bool(!operand)
-        }
-
-        "and" -> |values| {
-            let (left, right) = two_values!(values, to_bool);
-            Value::Bool(left && right)
-        }
-
-        "or" -> |values| {
-            let (left, right) = two_values!(values, to_bool);
-            Value::Bool(left || right)
-        }
+        "==" -> |values| comparison!(values, ==)
+        "!=" -> |values| comparison!(values, ==)
 
         "float" -> |values| {
             use Value::*;
@@ -122,6 +99,8 @@ fn prelude() -> HashMap<String, Value> {
             match one_value!(values) {
                 Float(float) => Float(*float),
                 Integer(int) => Float(*int as value::Float),
+                // TODO: Proper float conversion
+                BigInteger(bigint) => Float(bigint.to_string().parse().unwrap()),
                 _ => todo!("Error handling")
             }
         }
