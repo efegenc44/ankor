@@ -7,7 +7,7 @@ use crate::{
     },
     lexer::Lexer, parser::Parser,
     prelude::get_prelude,
-    value::{FunctionValue, Module, Value},
+    value::{FunctionValue, Module, Value, self},
 };
 
 pub struct Engine {
@@ -72,6 +72,7 @@ impl Engine {
         
         match expr {
             Integer(int) => Value::Integer(int.parse().unwrap()),
+            Float(float) => Value::Float(float.parse().unwrap()),
             String(string) => Value::String(string.clone()),
             Bool(bool) => Value::Bool(*bool),
             UnitValue => Value::Unit,
@@ -193,6 +194,8 @@ impl Engine {
             (Value::String(lstring), Pattern::String(rstring)) => lstring == rstring,
             (Value::Integer(lint), Pattern::NonNegativeInteger(rint)) => lint == &rint.parse::<isize>().unwrap(),
             (Value::Integer(lint), Pattern::NegativeInteger(rint)) => lint == &-rint.parse::<isize>().unwrap(),
+            (Value::Float(lfloat), Pattern::NonNegativeFloat(rfloat)) => lfloat == &rfloat.parse::<value::Float>().unwrap(),
+            (Value::Float(lfloat), Pattern::NegativeFloat(rfloat)) => lfloat == &-rfloat.parse::<value::Float>().unwrap(),
             (Value::Bool(lbool), Pattern::Bool(rbool)) => lbool == rbool,
             (Value::Unit, Pattern::Unit) => true,
             (Value::List(list), Pattern::List(ListPattern { before_rest, after_rest, rest })) => {

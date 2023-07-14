@@ -3,6 +3,7 @@ use std::collections::HashMap;
 #[derive(Clone)]
 pub enum Expr {
     Integer(String),
+    Float(String),
     String(String),
     Bool(bool),
     Identifier(String),
@@ -64,6 +65,8 @@ pub enum Pattern {
     String(String),
     NonNegativeInteger(String),
     NegativeInteger(String),
+    NonNegativeFloat(String),
+    NegativeFloat(String),
     Bool(bool),
     List(ListPattern),
     Structure(StructurePattern),

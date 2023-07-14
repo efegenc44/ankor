@@ -19,6 +19,7 @@ impl Iterator for Lexer {
             '+' => Plus,
             '-' => Minus,
             '*' => Star,
+            '/' => Slash,
             '(' => LParen,
             ')' => RParen,
             '[' => LSquare,
@@ -131,11 +132,27 @@ impl Lexer {
             self.advance();
         }
 
+        let token = if self.current_char() == &'.' {
+            self.advance();
+
+            number.push('.');
+            while let '0'..='9' | '_' = self.current_char() {
+                if let digit @ '0'..='9' = self.current_char() {
+                    number.push(*digit);
+                }
+                self.advance();
+            }
+
+            Token::Float
+        } else {
+            Token::Integer
+        };
+
         if Self::valid_symbol_character(self.current_char()) {
             todo!("Error handling");
         }
 
-        Token::Integer(number)
+        token(number)
     }
 
     fn lex_symbol(&mut self) -> Token {

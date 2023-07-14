@@ -1,12 +1,14 @@
 #[derive(PartialEq, Clone)]
 pub enum Token {
-    Integer(String),
     Identifier(String),
+    Integer(String),
+    Float(String),
     String(String),
 
     Plus,
     Minus,
     Star,
+    Slash,
     Equal,
     DoubleEqual,
     BangEqual,
@@ -56,12 +58,14 @@ impl std::fmt::Display for Token {
         use Token::*;
 
         match self {
-            Integer(int) => write!(f, "{int}"),
             Identifier(ident) => write!(f, "{ident}"),
+            Integer(int) => write!(f, "{int}"),
+            Float(float) => write!(f, "{float}"),
             String(string) => write!(f, "\"{string}\""),
             Plus => write!(f, "+"),
             Minus => write!(f, "-"),
             Star => write!(f, "*"),
+            Slash => write!(f, "/"),
             Equal => write!(f, "="),
             DoubleEqual => write!(f, "=="),
             BangEqual => write!(f, "!="),

@@ -102,6 +102,7 @@ impl Parser {
             Identifier(symbol) => Expr::Identifier(symbol.clone()),
             String(string) => Expr::String(string.clone()),
             Integer(int) => Expr::Integer(int.clone()),
+            Float(float) => Expr::Float(float.clone()),
             Ktrue => Expr::Bool(true),
             Kfalse => Expr::Bool(false),
 
@@ -171,7 +172,7 @@ impl Parser {
         expr
     }
 
-    binary_expr_precedence_level!(term,       call_expr,  Token::Star,                              LEFT_ASSOC);
+    binary_expr_precedence_level!(term,       call_expr,  Token::Star        | Token::Slash,        LEFT_ASSOC);
     binary_expr_precedence_level!(arithmetic, term,       Token::Plus        | Token::Minus,        LEFT_ASSOC);
     binary_expr_precedence_level!(comparison, arithmetic, Token::Less        | Token::LessEqual |
                                                           Token::Greater     | Token::GreaterEqual, NO_ASSOC);
@@ -375,14 +376,16 @@ impl Parser {
             Identifier(ident) => Pattern::Identifier(ident.clone()),
             String(string) => Pattern::String(string.clone()),
             Integer(int) => Pattern::NonNegativeInteger(int.clone()),
+            Float(float) => Pattern::NonNegativeFloat(float.clone()),
             Ktrue => Pattern::Bool(true),
             Kfalse => Pattern::Bool(false),
             Minus => {
                 self.advance();
-                let Integer(int) = self.current_token() else {
-                    todo!("Error handling")
-                };
-                Pattern::NegativeInteger(int.clone())
+                match self.current_token() {
+                    Integer(int) => Pattern::NegativeInteger(int.clone()),
+                    Float(float) => Pattern::NegativeFloat(float.clone()),
+                    _ => todo!("Error handling")
+                }
             },
 
             non_literal => return match non_literal {

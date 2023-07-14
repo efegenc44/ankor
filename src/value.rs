@@ -7,6 +7,7 @@ pub type List = Rc<Vec<Value>>;
 pub type Native = fn(&[Value]) -> Value;
 pub type Function = Rc<FunctionValue>; 
 pub type Structure = Rc<RefCell<HashMap<String, Value>>>;
+pub type Float = f64;
 
 pub struct FunctionValue {
     pub args: Vec<Pattern>,
@@ -18,6 +19,7 @@ pub struct FunctionValue {
 #[derive(Clone)]
 pub enum Value {
     Integer(isize),
+    Float(Float),
     String(String),
     Bool(bool),
     Function(Function),
@@ -29,13 +31,6 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn to_integer(&self) -> isize {
-        match self {
-            Self::Integer(int) => *int,
-            _ => todo!("Error handling"),
-        }
-    }
-
     pub fn to_bool(&self) -> bool {
         match self {
             Self::Bool(bool) => *bool,
@@ -50,6 +45,7 @@ impl std::fmt::Display for Value {
 
         match self {
             Integer(int) => write!(f, "{int}"),
+            Float(float) => write!(f, "{float}"),
             String(string) => write!(f, "{string}"),
             Bool(bool) => write!(f, "{bool}"),
             Function(_) => write!(f, "<function>"),
@@ -104,6 +100,8 @@ impl std::cmp::PartialEq for Value {
 
         match (self, other) {
             (Integer(lint), Integer(rint)) => lint == rint,
+            (Float(lfloat), Float(rfloat)) => lfloat == rfloat,
+            (String(lstring), String(rstring)) => lstring == rstring,
             (Bool(lbool), Bool(rbool)) => lbool == rbool,
             (List(llist), List(rlist)) => llist == rlist,
             (Structure(ls), Structure(rs)) => ls == rs,
