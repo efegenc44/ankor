@@ -373,6 +373,7 @@ impl Parser {
 
         let pattern = match self.current_token() {
             Identifier(ident) => Pattern::Identifier(ident.clone()),
+            String(string) => Pattern::String(string.clone()),
             Integer(int) => Pattern::NonNegativeInteger(int.clone()),
             Ktrue => Pattern::Bool(true),
             Kfalse => Pattern::Bool(false),

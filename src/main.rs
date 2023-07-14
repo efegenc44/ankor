@@ -16,16 +16,15 @@ use crate::{parser::Parser, prelude::get_prelude};
 fn main() -> io::Result<()> {
     match &args().collect::<Vec<_>>()[1..] {
         [] => repl(),
-        [file] => from_file(file),
-        _ => Ok(eprintln!("usage: ./ankor [file]"))
+        [file, cli_args @ ..] => from_file(file, cli_args),
     }
 }
 
-fn from_file(file_path: &str) -> io::Result<()> {
+fn from_file(file_path: &str, cli_args: &[String]) -> io::Result<()> {
     let file = fs::read_to_string(file_path)?;
     let tokens = Lexer::new(&file).collect();
     let astree = Parser::new(tokens).parse_module();
-    let result = Engine::run_from_entry(&astree);
+    let result = Engine::run_from_entry(&astree, cli_args);
     println!("= {result}");
     Ok(())
 }

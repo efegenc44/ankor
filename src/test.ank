@@ -63,6 +63,9 @@ j = def() =>
             fib(n - 1) + fib(n - 2)
     in fib(25)
 
-main = def() =>
+k = def() =>
     match 4
     | 3 or 4 => true
+
+main = def([x, y, ..]) =>
+    println(x, y)

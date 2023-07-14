@@ -39,7 +39,7 @@ impl Engine {
     }
 
     fn resolve_identifier(&self, ident: &str, module: &Module) -> Value {
-        if let Some((_, value)) = self.locals.iter().rev().find(|bind| &bind.0 == ident) {
+        if let Some((_, value)) = self.locals.iter().rev().find(|bind| bind.0 == ident) {
             return value.clone();
         }
 
@@ -50,7 +50,7 @@ impl Engine {
     }
 
     fn assign(&mut self, ident: &str, value: Value, module: &Module) {
-        if let Some((_, target)) = self.locals.iter_mut().rev().find(|bind| &bind.0 == ident) {
+        if let Some((_, target)) = self.locals.iter_mut().rev().find(|bind| bind.0 == ident) {
             return *target = value;
         }
 
@@ -136,7 +136,7 @@ impl Engine {
                     todo!("Error handling")
                 }
 
-                let clos_count = (&func.clos)
+                let clos_count = func.clos
                     .as_ref()
                     .map(|clos| {
                         for (arg, value) in clos {
@@ -190,6 +190,7 @@ impl Engine {
     // TODO: Maybe pass value as value rather than reference
     fn fits_pattern(&mut self, value: &Value, pattern: &Pattern, local_count: &mut usize) -> bool {
         match (value, pattern) {
+            (Value::String(lstring), Pattern::String(rstring)) => lstring == rstring,
             (Value::Integer(lint), Pattern::NonNegativeInteger(rint)) => lint == &rint.parse::<isize>().unwrap(),
             (Value::Integer(lint), Pattern::NegativeInteger(rint)) => lint == &-rint.parse::<isize>().unwrap(),
             (Value::Bool(lbool), Pattern::Bool(rbool)) => lbool == rbool,
@@ -373,7 +374,7 @@ impl Engine {
         let mut result = Value::Unit;
 
         let mut iter: Box<dyn Iterator<Item = Value>> = match self.evaluate(expr, module) {
-            Value::Integer(int) => Box::new((0..int).into_iter().map(|n| Value::Integer(n))),
+            Value::Integer(int) => Box::new((0..int).map(Value::Integer)),
             Value::List(list) => {
                 let len = list.len();
                 Box::new((0..len).map(move |i| list[i].clone()))
@@ -411,12 +412,10 @@ impl Engine {
     
         if self.evaluate(cond, module).to_bool() {
             self.evaluate(truu, module)
+        } else if let Some(fals) = fals {
+            self.evaluate(fals, module)
         } else {
-            if let Some(fals) = fals {
-                self.evaluate(fals, module)
-            } else {
-                Value::Unit
-            }
+            Value::Unit
         }
     }
 
@@ -464,14 +463,32 @@ impl Engine {
         module
     }
 
-    pub fn run_from_entry(definitions: &Vec<(String, Expr)>) -> Value {
+    pub fn run_from_entry(definitions: &Vec<(String, Expr)>, cli_args: &[String]) -> Value {
         let module = Self::evaluate_module(definitions);
         let main = module.borrow_mut().remove("main").expect("Error handling");
         let Value::Function(func) = main else {
             todo!("Error handling");
         };
 
+        let mut engine = Self::new();
+
+        match &func.args[..] {
+            [] => (),
+            [x] => {
+                let value = Value::List(Rc::new(
+                    cli_args
+                        .iter()
+                        .map(|arg| Value::String(arg.clone()))
+                        .collect()
+                ));
+                if !engine.fits_pattern(&value, x, &mut 0) {
+                    todo!("Error handling")
+                }
+            }
+            _   => todo!("Error handling")
+        }
+
         // Pass cli args if 1 arg provided
-        Self::new().evaluate(&func.expr, &module)
+        engine.evaluate(&func.expr, &module)
     }
 }
