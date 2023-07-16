@@ -70,5 +70,7 @@ k = def() =>
 l = def([x, y, ..]) =>
     println(x, y)
 
+# This is a comment
+
 main = def() =>
     fac(186)
