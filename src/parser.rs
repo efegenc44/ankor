@@ -3,9 +3,11 @@ use std::collections::HashMap;
 use crate::{
     expr::{
         SequenceExpr, ApplicationExpr, Expr, FunctionExpr, LetExpr,
-        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr, WhileExpr, BreakExpr, ForExpr, IfExpr, OrPattern
+        MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr, 
+        AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, 
+        ModuleExpr, WhileExpr, BreakExpr, ForExpr, IfExpr, OrPattern
     },
-    token::Token,
+    token::Token, span::{Spanned, Span, HasSpan}, error::Error,
 };
 
 macro_rules! binary_expr_precedence_level {
@@ -18,39 +20,45 @@ macro_rules! binary_expr_precedence_level {
     };
 
     ( $name:ident, $inferior:ident, $operators:pat, $loop:tt ) => {
-        fn $name(&mut self) -> Expr {
-            let mut left = self.$inferior();
+        fn $name(&mut self) -> ParseResult<Spanned<Expr>> {
+            let mut left = self.$inferior()?;
             $loop let current_token @ $operators = self.current_token() {
-                let op = Expr::Identifier(current_token.to_string());
+                let op = Expr::Identifier(current_token.to_string()).with_span(self.get_span());
                 self.advance();
-                let right = self.$inferior();
+                let right = self.$inferior()?;
+                let left_span = left.span; 
                 left = Expr::Application(ApplicationExpr {
                     func: Box::new(op),
                     args: vec![left, right]
                 })
+                .start_end(left_span, self.get_previous_span())
             }
-            left
+            Ok(left)
         }
     };
 
     ( $name:ident, $inferior:ident, $operators:pat, Intrinsic($t:ident, $expr:ident, $exprexpr:ident) ) => {
-        fn $name(&mut self) -> $t {
-            let mut left = self.$inferior();
+        fn $name(&mut self) -> ParseResult<Spanned<$t>> {
+            let mut left = self.$inferior()?;
             while let $operators = self.current_token() {
                 self.advance();
-                let right = self.$inferior();
+                let right = self.$inferior()?;
+                let left_span = left.span;
                 left = $t::$expr($exprexpr {
                     lhs: Box::new(left),
                     rhs: Box::new(right)
                 })
+                .start_end(left_span, self.get_previous_span())
             }
-            left
+            Ok(left)
         }
     };
 }
 
+type ParseResult<T> = Result<T, Error>;
+
 pub struct Parser {
-    tokens: Vec<Token>,
+    tokens: Vec<Spanned<Token>>,
     index: usize,
 
     in_function: usize,
@@ -58,32 +66,48 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(tokens: Vec<Token>) -> Self {
+    pub fn new(tokens: Vec<Spanned<Token>>) -> Self {
         Self { tokens, index: 0, in_function: 0, in_loop: 0 }
     }
 
     fn current_token(&self) -> &Token {
-        self.tokens.get(self.index).unwrap()
+        &self.tokens.get(self.index).unwrap().data
+    }
+
+    fn get_span(&self) -> Span {
+        self.tokens.get(self.index).unwrap().span
+    }
+
+    fn get_previous_span(&self) -> Span {
+        self.tokens.get(self.index - 1).unwrap().span
     }
 
     fn advance(&mut self) {
         self.index += 1;
     }
 
-    fn expect(&mut self, expected: Token) {
+    fn expect(&mut self, expected: Token) -> ParseResult<Span> {
         if self.current_token() != &expected {
-            todo!("Error handling")
+            return Error::make(
+                format!("Expected `{expected}`, instead found `{}`", self.current_token()), 
+                self.get_span()
+            )
         }
+        let span = self.get_span();
         self.advance();
+        Ok(span)
     }
 
-    fn expect_identifier(&mut self) -> String {
+    fn expect_identifier(&mut self) -> ParseResult<Spanned<String>> {
         let Token::Identifier(identifier) = self.current_token() else {
-            todo!("Error handling")
+            return Error::make(
+                format!("Expected an `Identifier`, instead found `{}`", self.current_token()), 
+                self.get_span()
+            )
         };
-        let identifier = identifier.clone();
+        let result = Spanned { data: identifier.clone(), span: self.get_span() };
         self.advance();
-        identifier
+        Ok(result)
     }
 
     fn optional(&mut self, expected: Token) -> bool {
@@ -95,9 +119,10 @@ impl Parser {
         }
     }
 
-    fn product(&mut self) -> Expr {
+    fn product(&mut self) -> ParseResult<Spanned<Expr>> {
         use Token::*;
 
+        let current_span = self.get_span(); 
         let expr = match self.current_token() {
             Identifier(symbol) => Expr::Identifier(symbol.clone()),
             String(string) => Expr::String(string.clone()),
@@ -106,26 +131,26 @@ impl Parser {
             Ktrue => Expr::Bool(true),
             Kfalse => Expr::Bool(false),
 
-            non_literal => return match non_literal {
-                Klet => Expr::Let(self.let_expr()),
-                Kdef => Expr::Function(self.function_expr()),
-                Kmatch => Expr::Match(self.match_expr()),
-                Kimport => Expr::Import(self.import_expr()),
-                Kmodule => Expr::Module(self.module_expr()),
-                Kwhile => Expr::While(self.while_expr()),
-                Kfor => Expr::For(self.for_expr()),
-                Kif => Expr::If(self.if_expr()),
-                Kreturn => Expr::Return(self.return_expr()),
-                Kbreak => Expr::Break(self.break_expr()),
-                Kcontinue => self.continue_expr(),
-                LSquare => Expr::List(self.list_expr()),
-                LCurly => Expr::Structure(self.structure_expr()),
+            non_literal => return Ok((match non_literal {
+                Klet => Expr::Let(self.let_expr()?),
+                Kdef => Expr::Function(self.function_expr()?),
+                Kmatch => Expr::Match(self.match_expr()?),
+                Kimport => Expr::Import(self.import_expr()?),
+                Kmodule => Expr::Module(self.module_expr()?),
+                Kwhile => Expr::While(self.while_expr()?),
+                Kfor => Expr::For(self.for_expr()?),
+                Kif => Expr::If(self.if_expr()?),
+                Kreturn => Expr::Return(self.return_expr()?),
+                Kbreak => Expr::Break(self.break_expr()?),
+                Kcontinue => self.continue_expr()?,
+                LSquare => Expr::List(self.list_expr()?),
+                LCurly => Expr::Structure(self.structure_expr()?),
                 Bang | Minus => {
                     let op = Expr::Identifier(non_literal.to_string());
                     self.advance();
                     Expr::Application(ApplicationExpr {
-                        func: Box::new(op),
-                        args: vec![self.product()]
+                        func: Box::new(op.with_span(current_span)),
+                        args: vec![self.product()?]
                     })
                 }
                 LParen => {
@@ -133,43 +158,52 @@ impl Parser {
                     if self.optional(RParen) {
                         Expr::UnitValue
                     } else {
-                        let expr = self.expr();
-                        self.expect(RParen);
-                        expr
+                        let expr = self.expr()?;
+                        self.expect(RParen)?;
+                        expr.data
                     }
                 }
-                _ => todo!("Error handling"),
-            }
+                unknown => return Error::make(
+                    format!("Unknown Start of an Expression: `{unknown}`"), 
+                    self.get_span()
+                )
+            })
+            .start_end(current_span, self.get_previous_span()))
         };
         self.advance();
-        expr
+
+        Ok(expr.with_span(current_span))
     }
 
-    fn call_expr(&mut self) -> Expr {
+    fn call_expr(&mut self) -> ParseResult<Spanned<Expr>> {
         use Token::*;
 
-        let mut expr = self.product();
+        let mut expr = self.product()?;
         loop {
             match self.current_token() {
                 LParen => {
+                    let span = expr.span;
                     expr = Expr::Application(ApplicationExpr {
                         func: Box::new(expr),
-                        args: self.parse_comma_seperated(LParen, RParen, Self::expr),
+                        args: self.parse_comma_seperated(LParen, RParen, Self::expr)?,
                     })
+                    .start_end(span, self.get_previous_span())
                 }
-
+                
                 Dot => {
                     self.advance();
+                    let span = expr.span;
                     expr = Expr::Access(AccessExpr {
                         expr: Box::new(expr),
-                        name: self.expect_identifier(),
+                        name: self.expect_identifier()?,
                     })
+                    .start_end(span, self.get_previous_span())
                 }
 
                 _ => break
             }
         }
-        expr
+        Ok(expr)
     }
 
     binary_expr_precedence_level!(term,       call_expr,  Token::Star        | Token::Slash,        LEFT_ASSOC);
@@ -182,196 +216,210 @@ impl Parser {
     binary_expr_precedence_level!(assignment, bool_or,    Token::Equal,     Intrinsic(Expr, Assignment, AssignmentExpr));
     binary_expr_precedence_level!(sequence,   assignment, Token::Semicolon, Intrinsic(Expr, Sequence,   SequenceExpr));
 
-    fn let_expr(&mut self) -> LetExpr {
+    fn let_expr(&mut self) -> ParseResult<LetExpr> {
         use Token::*;
 
-        self.expect(Klet);
-        let patt = self.pattern();
-        self.expect(Equal);
-        let vexp = Box::new(self.expr());
-        self.expect(Kin);
-        let expr = Box::new(self.expr());
+        self.expect(Klet)?;
+        let patt = self.pattern()?;
+        self.expect(Equal)?;
+        let vexp = Box::new(self.expr()?);
+        self.expect(Kin)?;
+        let expr = Box::new(self.expr()?);
 
-        LetExpr { patt, vexp, expr }
+        Ok(LetExpr { patt, vexp, expr })
     }
 
-    fn function_expr(&mut self) -> FunctionExpr {
+    fn function_expr(&mut self) -> ParseResult<FunctionExpr> {
         use Token::*;
 
         self.in_function += 1;
         
-        self.expect(Kdef);
-        let args = self.parse_comma_seperated(LParen, RParen, Self::pattern);
-        let clos = matches!(self.current_token(), Pipe)
-            .then(|| self.parse_comma_seperated(Pipe, Pipe, Self::expect_identifier));
-        self.expect(FatArrow);
-        let expr = Box::new(self.expr());
+        self.expect(Kdef)?;
+        let args = self.parse_comma_seperated(LParen, RParen, Self::pattern)?;
+        let clos = match matches!(self.current_token(), Pipe) {
+            true => Some(self.parse_comma_seperated(Pipe, Pipe, Self::expect_identifier)?),
+            false => None,
+        };
+        self.expect(FatArrow)?;
+        let expr = Box::new(self.expr()?);
     
         self.in_function -= 1;
         
-        FunctionExpr { args, expr, clos }
+        Ok(FunctionExpr { args, expr, clos })
     }
 
-    fn import_expr(&mut self) -> ImportExpr {
+    fn import_expr(&mut self) -> ParseResult<ImportExpr> {
         use Token::*;
 
-        self.expect(Kimport);
-        let mut parts = vec![self.expect_identifier()];
+        self.expect(Kimport)?;
+        let mut parts = vec![self.expect_identifier()?.data];
         while self.optional(Dot) {
-            parts.push(self.expect_identifier())
+            parts.push(self.expect_identifier()?.data)
         }
 
-        ImportExpr { parts }
+        Ok(ImportExpr { parts })
     }
 
-    fn list_expr(&mut self) -> ListExpr {
+    fn list_expr(&mut self) -> ParseResult<ListExpr> {
         use Token::*;
 
-        let exprs = self.parse_comma_seperated(LSquare, RSquare, Self::expr);
+        let exprs = self.parse_comma_seperated(LSquare, RSquare, Self::expr)?;
 
-        ListExpr { exprs }
+        Ok(ListExpr { exprs })
     }
 
-    fn module_expr(&mut self) -> ModuleExpr {
+    fn module_expr(&mut self) -> ParseResult<ModuleExpr> {
         use Token::*;
 
-        self.expect(Kmodule);
-        self.expect(LParen);
-        let definitions = self.parse_module();
-        self.expect(RParen);
+        self.expect(Kmodule)?;
+        self.expect(LParen)?;
+        let definitions = self.parse_module()?;
+        self.expect(RParen)?;
 
-        ModuleExpr { definitions }
+        Ok(ModuleExpr { definitions })
     }
 
-    fn while_expr(&mut self) -> WhileExpr {
-        use Token::*;
-
-        self.in_loop += 1;
-        
-        self.expect(Kwhile);
-        let cond = Box::new(self.expr());
-        self.expect(Kdo);
-        let body = Box::new(self.expr());
-        
-        self.in_loop -= 1;
-        
-        WhileExpr { cond, body }
-    }
-
-    fn for_expr(&mut self) -> ForExpr {
+    fn while_expr(&mut self) -> ParseResult<WhileExpr> {
         use Token::*;
 
         self.in_loop += 1;
         
-        self.expect(Kfor);
-        let patt = self.pattern();
-        self.expect(Kin);
-        let expr = Box::new(self.expr());
-        self.expect(Kdo);
-        let body = Box::new(self.expr());
+        self.expect(Kwhile)?;
+        let cond = Box::new(self.expr()?);
+        self.expect(Kdo)?;
+        let body = Box::new(self.expr()?);
         
         self.in_loop -= 1;
         
-        ForExpr { patt, expr, body }
+        Ok(WhileExpr { cond, body })
     }
 
-    fn if_expr(&mut self) -> IfExpr {
+    fn for_expr(&mut self) -> ParseResult<ForExpr> {
+        use Token::*;
+
+        self.in_loop += 1;
+        
+        self.expect(Kfor)?;
+        let patt = self.pattern()?;
+        self.expect(Kin)?;
+        let expr = Box::new(self.expr()?);
+        self.expect(Kdo)?;
+        let body = Box::new(self.expr()?);
+        
+        self.in_loop -= 1;
+        
+        Ok(ForExpr { patt, expr, body })
+    }
+
+    fn if_expr(&mut self) -> ParseResult<IfExpr> {
         use Token::*;
         
-        self.expect(Kif);
-        let cond = Box::new(self.expr());
-        self.expect(Kthen);
-        let truu = Box::new(self.expr());
-        let fals = self.optional(Kelse)
-            .then(|| Box::new(self.expr()));
+        self.expect(Kif)?;
+        let cond = Box::new(self.expr()?);
+        self.expect(Kthen)?;
+        let truu = Box::new(self.expr()?);
+        let fals = match self.optional(Kelse) {
+            true => Some(Box::new(self.expr()?)),
+            false => None,
+        };
         
-        IfExpr { cond, truu, fals }
+        Ok(IfExpr { cond, truu, fals })
     }
 
-    fn return_expr(&mut self) -> ReturnExpr {
+    fn return_expr(&mut self) -> ParseResult<ReturnExpr> {
         use Token::*;
 
         if self.in_function == 0 {
-            todo!("Error handling")
+            return Error::make(
+                "Return Expression Outside of a Function", 
+                self.get_span()
+            )
         }
 
-        self.expect(Kreturn);
-        let expr = Box::new(self.expr());
+        self.expect(Kreturn)?;
+        let expr = Box::new(self.expr()?);
 
-        ReturnExpr { expr }
+        Ok(ReturnExpr { expr })
     }
 
-    fn break_expr(&mut self) -> BreakExpr {
+    fn break_expr(&mut self) -> ParseResult<BreakExpr> {
         use Token::*;
 
         if self.in_loop == 0 {
-            todo!("Error handling")
+            return Error::make(
+                "Break Expression Outside of a Loop", 
+                self.get_span()
+            )
         }
 
-        self.expect(Kbreak);
-        let expr = Box::new(self.expr());
+        self.expect(Kbreak)?;
+        let expr = Box::new(self.expr()?);
 
-        BreakExpr { expr }
+        Ok(BreakExpr { expr })
     }
 
-    fn continue_expr(&mut self) -> Expr {
+    fn continue_expr(&mut self) -> ParseResult<Expr> {
         use Token::*;
 
         if self.in_loop == 0 {
-            todo!("Error handling")
+            return Error::make(
+                "Continue Expression Outside of a Loop", 
+                self.get_span()
+            )
         }
 
-        self.expect(Kcontinue);
+        self.expect(Kcontinue)?;
 
-        Expr::Continue
+        Ok(Expr::Continue)
     }
 
-    fn structure_expr(&mut self) -> StructureExpr {
+    fn structure_expr(&mut self) -> ParseResult<StructureExpr> {
         use Token::*;
 
-        let fields = self.parse_comma_seperated(LCurly, RCurly, Self::field);
+        let fields = self.parse_comma_seperated(LCurly, RCurly, Self::field)?;
         
-        StructureExpr { fields }
+        Ok(StructureExpr { fields })
     }
 
-    fn field(&mut self) -> (String, Expr) {
+    fn field(&mut self) -> ParseResult<(String, Spanned<Expr>)> {
         use Token::*;
 
-        let field_name = self.expect_identifier();
-        self.expect(Colon);
-        let expr = self.expr();
+        let field_name = self.expect_identifier()?.data;
+        self.expect(Colon)?;
+        let expr = self.expr()?;
     
-        (field_name, expr)
+        Ok((field_name, expr))
     }
 
-    fn match_expr(&mut self) -> MatchExpr {
+    fn match_expr(&mut self) -> ParseResult<MatchExpr> {
         use Token::*;
 
-        self.expect(Kmatch);
-        let expr = Box::new(self.expr());
+        self.expect(Kmatch)?;
+        let expr = Box::new(self.expr()?);
 
-        let mut arms = vec![self.match_arm()];
+        let mut arms = vec![self.match_arm()?];
         while let Pipe = self.current_token() {
-            arms.push(self.match_arm())
+            arms.push(self.match_arm()?)
         } 
 
-        MatchExpr { expr, arms }
+        Ok(MatchExpr { expr, arms })
     }
 
-    fn match_arm(&mut self) -> (Pattern, Expr) {
+    fn match_arm(&mut self) -> ParseResult<(Spanned<Pattern>, Spanned<Expr>)> {
         use Token::*;
 
-        self.expect(Pipe);
-        let pattern = self.pattern();
-        self.expect(FatArrow);
-        let expr = self.expr();  
+        self.expect(Pipe)?;
+        let pattern = self.pattern()?;
+        self.expect(FatArrow)?;
+        let expr = self.expr()?;  
 
-        (pattern, expr)
+        Ok((pattern, expr))
     }
 
-    fn single_pattern(&mut self) -> Pattern {
+    fn single_pattern(&mut self) -> ParseResult<Spanned<Pattern>> {
         use Token::*;
 
+        let current_span = self.get_span();
         let pattern = match self.current_token() {
             Identifier(ident) => Pattern::Identifier(ident.clone()),
             String(string) => Pattern::String(string.clone()),
@@ -384,177 +432,191 @@ impl Parser {
                 match self.current_token() {
                     Integer(int) => Pattern::NegativeInteger(int.clone()),
                     Float(float) => Pattern::NegativeFloat(float.clone()),
-                    _ => todo!("Error handling")
+                    invalid => return Error::make(
+                        format!("`-` Can Only Be Followed by Number Literals in Patterns, found: `{invalid}`"), 
+                        self.get_span()
+                    )
                 }
             },
 
-            non_literal => return match non_literal {
+            non_literal => return Ok((match non_literal {
                 LParen => {
                     self.advance();
                     if self.optional(RParen) {
                         Pattern::Unit
                     } else {
-                        let pattern = self.pattern();
-                        self.expect(RParen);
-                        pattern
+                        let pattern = self.pattern()?;
+                        self.expect(RParen)?;
+                        pattern.data
                     }
                 }
-                LSquare => Pattern::List(self.list_pattern()),
-                LCurly => Pattern::Structure(self.structure_pattern()),
-                _ => todo!("Error handling")
-            }
+                LSquare => Pattern::List(self.list_pattern()?),
+                LCurly => Pattern::Structure(self.structure_pattern()?),
+                unknown => return Error::make(
+                    format!("Unknown Start of a Pattern: `{unknown}`"), 
+                    self.get_span()
+                )
+            })
+            .start_end(current_span, self.get_previous_span()))
         };
         self.advance();
-        pattern
+
+        Ok(pattern.with_span(current_span))
     }
 
     binary_expr_precedence_level!(or_pattern, single_pattern, Token::Kor, Intrinsic(Pattern, Or, OrPattern));
 
-    fn pattern(&mut self) -> Pattern {
+    fn pattern(&mut self) -> ParseResult<Spanned<Pattern>> {
         self.or_pattern()
     }
 
-    fn rest_pattern(&mut self) -> Option<String> {
+    fn rest_pattern(&mut self) -> ParseResult<Option<String>> {
         use Token::*;
 
-        self.expect(Dot);
-        self.expect(Dot);
-        match self.current_token() {
+        self.expect(Dot)?;
+        self.expect(Dot)?;
+        Ok(match self.current_token() {
             Identifier(ident) => {
                 let ident = ident.clone();
                 self.advance();
                 Some(ident)
             }
             _ => None,
-        }
+        })
     }
 
-    fn list_pattern(&mut self) -> ListPattern {
+    fn list_pattern(&mut self) -> ParseResult<ListPattern> {
         use Token::*;
 
         let mut before_rest = vec![];
         let mut after_rest = vec![];
         
-        self.expect(LSquare);
+        self.expect(LSquare)?;
         if !self.optional(RSquare) {
             match self.current_token() {
                 Dot => {
-                    let rest = Some(self.rest_pattern());
+                    let rest = Some(self.rest_pattern()?);
                     while !self.optional(RSquare) {
-                        self.expect(Comma);
-                        after_rest.push(self.pattern())
+                        self.expect(Comma)?;
+                        after_rest.push(self.pattern()?)
                     }
-                    return ListPattern { before_rest, after_rest, rest }
+                    return Ok(ListPattern { before_rest, after_rest, rest })
                 }
-                _ => before_rest.push(self.pattern())
+                _ => before_rest.push(self.pattern()?)
             }
 
             while !self.optional(RSquare) {
-                self.expect(Comma);
+                self.expect(Comma)?;
                 match self.current_token() {
                     Dot => {
-                        let rest = Some(self.rest_pattern());
+                        let rest = Some(self.rest_pattern()?);
                         while !self.optional(RSquare) {
-                            self.expect(Comma);
-                            after_rest.push(self.pattern())
+                            self.expect(Comma)?;
+                            after_rest.push(self.pattern()?)
                         }
-                        return ListPattern { before_rest, after_rest, rest }
+                        return Ok(ListPattern { before_rest, after_rest, rest })
                     },
-                    _ => before_rest.push(self.pattern())
+                    _ => before_rest.push(self.pattern()?)
                 }
             }
         }
 
-        ListPattern { before_rest, after_rest, rest: None }
+        Ok(ListPattern { before_rest, after_rest, rest: None })
     }
 
-    fn structure_pattern(&mut self) -> StructurePattern {
+    fn structure_pattern(&mut self) -> ParseResult<StructurePattern> {
         use Token::*;
 
         let mut fields = HashMap::new();
         
-        self.expect(LCurly);
+        self.expect(LCurly)?;
         if !self.optional(RCurly) {
             match self.current_token() {
                 Dot => {
-                    let rest = Some(self.rest_pattern());
-                    self.expect(RCurly);
-                    return StructurePattern { fields, rest }
+                    let rest = Some(self.rest_pattern()?);
+                    self.expect(RCurly)?;
+                    return Ok(StructurePattern { fields, rest })
                 }
                 _ => {
-                    let (field_name, pattern) = self.field_pattern();
-                    fields.insert(field_name, pattern);
+                    let (field_name, pattern) = self.field_pattern()?;
+                    fields.insert(field_name.data, pattern);
                 }
             }
 
             while !self.optional(RCurly) {
-                self.expect(Comma);
+                self.expect(Comma)?;
                 match self.current_token() {
                     Dot => {
-                        let rest = Some(self.rest_pattern());
-                        self.expect(RCurly);
-                        return StructurePattern { fields, rest }
+                        let rest = Some(self.rest_pattern()?);
+                        self.expect(RCurly)?;
+                        return Ok(StructurePattern { fields, rest })
                     },
                     _ => {
-                        let (field_name, pattern) = self.field_pattern();
-                        fields.insert(field_name, pattern);
+                        let (field_name, pattern) = self.field_pattern()?;
+                        fields.insert(field_name.data, pattern);
                     }
                 }
             }
         }
 
-        StructurePattern { fields, rest: None }
+        Ok(StructurePattern { fields, rest: None })
     }
 
-    fn field_pattern(&mut self) -> (String, Option<Pattern>) {
+    fn field_pattern(&mut self) -> ParseResult<(Spanned<String>, Option<Spanned<Pattern>>)> {
         use Token::*;
 
-        let field_name = self.expect_identifier();
-        let pattern = self.optional(Colon).then(|| self.pattern());
+        let field_name = self.expect_identifier()?;
+        let pattern = match self.optional(Colon) {
+            true => Some(self.pattern()?),
+            false => None,
+        };
     
-        (field_name, pattern)
+        Ok((field_name, pattern))
     }
 
-    fn expr(&mut self) -> Expr {
+    fn expr(&mut self) -> ParseResult<Spanned<Expr>> {
         self.sequence()
     }
     
-    pub fn parse(&mut self) -> Expr {
+    pub fn parse(&mut self) -> ParseResult<Spanned<Expr>> {
         let expr = self.expr();
 
         if self.index != self.tokens.len() - 1 {
-            todo!("Error handling")
+            return Error::make(
+                "Some of the Tokens Couldn't Be Consumed by the Parser", 
+                self.get_span()
+            )
         }
         expr
     }
 
-    pub fn parse_module(&mut self) -> Vec<(String, Expr)> {
+    pub fn parse_module(&mut self) -> ParseResult<Vec<(String, Spanned<Expr>)>> {
         let mut module = vec![];
         while let Token::Identifier(name) = self.current_token() {
             let name = name.clone();
             self.advance();
-            self.expect(Token::Equal);
-            let expr = self.expr();
+            self.expect(Token::Equal)?;
+            let expr = self.expr()?;
             module.push((name, expr))
         } 
-        module
+        Ok(module)
     }
 
     fn parse_comma_seperated<T>(
         &mut self,
         open: Token,
         close: Token,
-        f: fn(&mut Self) -> T,
-    ) -> Vec<T> {
+        f: fn(&mut Self) -> ParseResult<T>,
+    ) -> ParseResult<Vec<T>> {
         let mut values = vec![];
-        self.expect(open);
+        self.expect(open)?;
         if !self.optional(close.clone()) {
-            values.push(f(self));
+            values.push(f(self)?);
             while !self.optional(close.clone()) {
-                self.expect(Token::Comma);
-                values.push(f(self));
+                self.expect(Token::Comma)?;
+                values.push(f(self)?);
             }
         }
-        values
+        Ok(values)
     }
 }

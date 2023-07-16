@@ -1,15 +1,23 @@
-use crate::token::Token;
+use crate::{token::Token, span::{Spanned, HasSpan, Span}, error::Error};
 
 pub struct Lexer {
     chars: Vec<char>,
     index: usize,
+
+    col: usize, 
+    row: usize, 
 }
 
+type LexResult = Result<Spanned<Token>, Error>; 
+
 impl Iterator for Lexer {
-    type Item = Token;
+    type Item = LexResult;
 
     fn next(&mut self) -> Option<Self::Item> {
         use Token::*;
+
+        let start_col = self.col;
+        let start_line = self.row;
 
         if self.index >= self.chars.len() {
             return None;
@@ -40,15 +48,20 @@ impl Iterator for Lexer {
             '\0' => End,
 
             non_trivial => return match non_trivial {
-                ' ' | '\t' | '\r' | '\n' => {
+                ' ' | '\t' | '\r' => {
                     self.advance();
+                    self.next()
+                }
+                '\n' => {
+                    self.advance();
+                    self.row += 1;
+                    self.col = 1;
                     self.next()
                 }
                 '#' => {
                     while self.current_char() != &'\n' {
                         self.advance();
                     }
-                    self.advance();
                     self.next()
                 }
                 '"' => {
@@ -58,13 +71,17 @@ impl Iterator for Lexer {
                     Some(self.lex_number())
                 }
                 ch if Self::valid_symbol_character(ch) => {
-                    Some(self.lex_symbol())
+                    Some(Ok(self.lex_symbol()))
                 }
-                _ => todo!("Error handling")
+                unknown => Some(Error::make(
+                    format!("Unknown Start of a Token: {unknown}"),
+                    Span::new(start_line, self.row, start_col, self.col + 1)
+                ))
             }
         };
         self.advance();
-        Some(token)
+
+        Some(Ok(token.with_span(Span::new(start_line, self.row, start_col, self.col))))
     }
 }
 
@@ -75,7 +92,7 @@ impl Lexer {
             chars.push('\0');
             chars
         };
-        Self { chars, index: 0 }
+        Self { chars, index: 0, col: 1, row: 1 }
     }
 
     fn current_char(&self) -> &char {
@@ -83,6 +100,7 @@ impl Lexer {
     }
 
     fn advance(&mut self) {
+        self.col += 1;
         self.index += 1;
     }
 
@@ -95,12 +113,20 @@ impl Lexer {
         }
     }
 
-    fn lex_string(&mut self) -> Token {
+    fn lex_string(&mut self) -> LexResult {
+        let start_col = self.col;
+        let start_line = self.row;
+
         let mut string = String::new();
 
         self.advance();
         while self.current_char() != &'"' && self.current_char() != &'\0' {
             let ch = match self.current_char() {
+                '\n' => {
+                    self.col = 1;
+                    self.row += 1;
+                    '\n'
+                }
                 '\\' => {
                     self.advance();
                     match self.current_char() {
@@ -111,7 +137,10 @@ impl Lexer {
                         '\\' => '\\',
                         '\"' => '\"',
                         // '\0' => todo!("Error handling")
-                        _    => todo!("Error handling")
+                        unknown => return Error::make(
+                            format!("Unknown Escape Sequence: {unknown}"), 
+                            Span::new(self.row, self.row, self.col, self.col + 1)
+                        )
                     }
                 },
                 ch => *ch
@@ -121,15 +150,21 @@ impl Lexer {
         }
 
         if self.current_char() == &'\0' {
-            todo!("Error handling")
+            return Error::make(
+                "Unterminated String Literal",
+                Span::new(start_line, self.row, start_col, self.col)
+            )
         }
 
         self.advance();
 
-        Token::String(string)
+        Ok(Token::String(string).with_span(Span::new(start_line, self.row, start_col, self.col)))
     }
 
-    fn lex_number(&mut self) -> Token {
+    fn lex_number(&mut self) -> LexResult {
+        let start_col = self.col;
+        let start_line = self.row;
+
         let mut number = String::new();
 
         while let '0'..='9' | '_' = self.current_char() {
@@ -156,16 +191,21 @@ impl Lexer {
         };
 
         if Self::valid_symbol_character(self.current_char()) {
-            todo!("Error handling");
+            return Error::make(
+                "Invalid Number Literal",
+                Span::new(start_line, self.row, start_col, self.col + 1)
+            )
         }
 
-        token(number)
+        Ok(token(number).with_span(Span::new(start_line, self.row, start_col, self.col)))
     }
 
-    fn lex_symbol(&mut self) -> Token {
+    fn lex_symbol(&mut self) -> Spanned<Token> {
         use Token::*;
 
         let start = self.index;
+        let start_col = self.col;
+        let start_line = self.row;
 
         while Self::valid_symbol_character(self.current_char()) {
             self.advance();
@@ -197,6 +237,7 @@ impl Lexer {
             "continue" => Kcontinue,
             _ => Identifier(symbol),
         }
+        .with_span(Span::new(start_line, self.row, start_col, self.col))
     }
 
     fn valid_symbol_character(ch: &char) -> bool {

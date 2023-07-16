@@ -5,11 +5,13 @@ use apnum::BigInt;
 use crate::{
     expr::{
         AccessExpr, ApplicationExpr, Expr, FunctionExpr, ImportExpr,
-        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr, AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr, WhileExpr, BreakExpr, ForExpr, IfExpr, OrPattern,
+        LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr, 
+        AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr, 
+        WhileExpr, BreakExpr, ForExpr, IfExpr, OrPattern,
     },
     lexer::Lexer, parser::Parser,
     prelude::get_prelude,
-    value::{FunctionValue, Module, Value, self},
+    value::{FunctionValue, Value, self, ModuleValue}, span::{Spanned, Span}, handle_error, reporter::Reporter, error::Error,
 };
 
 pub struct Engine {
@@ -18,6 +20,8 @@ pub struct Engine {
     return_exception: Option<Value>,
     break_exception: Option<Value>,
     continue_exception: bool,
+
+    pub error: Option<(Error, String)>
 }
 
 impl Engine {
@@ -26,7 +30,8 @@ impl Engine {
             locals: vec![], 
             return_exception: None, 
             break_exception: None, 
-            continue_exception: false 
+            continue_exception: false,
+            error: None, 
         }
     }
 
@@ -40,25 +45,46 @@ impl Engine {
         }
     }
 
-    fn resolve_identifier(&self, ident: &str, module: &Module) -> Value {
+    fn set_error<S>(&mut self, msg: S, span: Span, source: String) -> Value 
+    where
+        S: Into<String> 
+    {
+        self.error = Some((Error::new(msg, span, None), source));
+        Value::Unit
+    }
+
+    fn set_call_error<S>(&mut self, msg: S, span: Span, call_site: Span, call_site_source: String, source: String) -> Value 
+    where
+        S: Into<String> 
+    {
+        self.error = Some((
+            Error::new(msg, span, Some((Box::new(Error::new("Call Site", call_site, None)), call_site_source))), 
+            source
+        ));
+        Value::Unit
+    }
+
+    fn resolve_identifier(&mut self, ident: &str, module: &ModuleValue, span: Span) -> Value {
         if let Some((_, value)) = self.locals.iter().rev().find(|bind| bind.0 == ident) {
             return value.clone();
         }
 
-        match module.borrow().get(ident) {
+        match module.map.borrow().get(ident) {
             Some(value) => value.clone(),
-            None => todo!("Error handling"),
-        } 
+            None => self.set_error(format!("Undefined Symbol `{ident}`"), span, module.source.clone())
+        }
     }
 
-    fn assign(&mut self, ident: &str, value: Value, module: &Module) {
+    fn assign(&mut self, ident: &str, value: Value, module: &ModuleValue, span: Span) {
         if let Some((_, target)) = self.locals.iter_mut().rev().find(|bind| bind.0 == ident) {
             return *target = value;
         }
 
-        match module.borrow_mut().get_mut(ident) {
+        match module.map.borrow_mut().get_mut(ident) {
             Some(target) => *target = value,
-            None => todo!("Error handling"),
+            None => {
+                self.set_error(format!("Undefined Symbol `{ident}`"), span, module.source.clone());
+            }
         } 
     }
 
@@ -69,29 +95,33 @@ impl Engine {
         }
     }
 
-    pub fn evaluate(&mut self, expr: &Expr, module: &Module) -> Value {
+    fn is_exception_occured(&self) -> bool {
+        self.return_exception.is_some() || 
+        self.break_exception.is_some()  || 
+        self.continue_exception         ||
+        self.error.is_some()
+    }
+
+    pub fn evaluate(&mut self, expr: &Spanned<Expr>, module: &ModuleValue) -> Value {
         use Expr::*;
 
-        if self.return_exception.is_some() || 
-           self.break_exception.is_some()  || 
-           self.continue_exception 
-        {
+        if self.is_exception_occured() {
             return Value::Unit
         }
         
-        match expr {
+        match &expr.data {
             Integer(int) => Self::parse_integer(int),
             Float(float) => Value::Float(float.parse().unwrap()),
             String(string) => Value::String(string.clone()),
             Bool(bool) => Value::Bool(*bool),
             UnitValue => Value::Unit,
-            Identifier(ident) => self.resolve_identifier(ident, module),
+            Identifier(ident) => self.resolve_identifier(ident, module, expr.span),
             Let(let_expr) => self.evaluate_let_expr(let_expr, module),
             Function(function_expr) => self.evaluate_function_expr(function_expr, module),
-            Application(application_expr) => self.evaluate_application_expr(application_expr, module),
+            Application(application_expr) => self.evaluate_application_expr(application_expr, module, expr.span),
             Sequence(sequnce_expr) => self.evaluate_sequence_expr(sequnce_expr, module),
-            Match(match_expr) => self.evaluate_match_expr(match_expr, module),
-            Import(import_expr) => self.evaluate_import_expr(import_expr),
+            Match(match_expr) => self.evaluate_match_expr(match_expr, module, expr.span),
+            Import(import_expr) => self.evaluate_import_expr(import_expr, module, expr.span),
             Access(access_expr) => self.evaluate_access_expr(access_expr, module),
             List(list_expr) => self.evaluate_list_expr(list_expr, module),
             Structure(structure_expr) => self.evaluate_structure_expr(structure_expr, module),
@@ -102,24 +132,24 @@ impl Engine {
             Return(return_expr) => self.evaluate_return_expr(return_expr, module),
             Break(break_expr) => self.evaluate_break_expr(break_expr, module),
             Continue => self.evaluate_continue_expr(),
-            Module(module_expr) => Self::evaluate_module_expr(module_expr),
+            Module(module_expr) => self.evaluate_module_expr(module_expr, module),
         }
     }
 
-    fn evaluate_let_expr(&mut self, let_expr: &LetExpr, module: &Module) -> Value {
+    fn evaluate_let_expr(&mut self, let_expr: &LetExpr, module: &ModuleValue) -> Value {
         let LetExpr { patt, vexp, expr } = let_expr;
 
         let value = self.evaluate(vexp, module);
         let mut local_count = 0;
         if !self.fits_pattern(&value, patt, &mut local_count) {
-            todo!("Error handling")
-        };
+            self.set_error("Pattern Couldn't Be Matched at Let Expression", patt.span, module.source.clone());
+        }
         let result = self.evaluate(expr, module);
         self.remove_local(local_count);
         result
     }
 
-    fn evaluate_function_expr(&mut self, function_expr: &FunctionExpr, module: &Module) -> Value {
+    fn evaluate_function_expr(&mut self, function_expr: &FunctionExpr, module: &ModuleValue) -> Value {
         let function_value = FunctionValue {
             args: function_expr.args.clone(),
             expr: function_expr.expr.clone(),
@@ -127,23 +157,32 @@ impl Engine {
                 .as_ref()
                 .map(|clos| clos
                     .iter()
-                    .map(|ident| (ident.clone(), self.resolve_identifier(ident, module))).collect()),
+                    .map(|ident| (ident.data.clone(), self.resolve_identifier(&ident.data, module, ident.span))).collect()),
             modl: module.clone()
         };
         
         Value::Function(Rc::new(function_value))
     }
 
-    fn evaluate_application_expr(&mut self, application_expr: &ApplicationExpr, module: &Module) -> Value {
+    fn evaluate_application_expr(&mut self, application_expr: &ApplicationExpr, module: &ModuleValue, span: Span) -> Value {
         let ApplicationExpr { func, args } = application_expr;
 
         let arg_values: Vec<_> = args.iter().map(|expr| self.evaluate(expr, module)).collect();
 
-        match self.evaluate(func, module) {
-            Value::Native(func) => func(&arg_values),
+        let func_value = self.evaluate(func, module);
+
+        if self.is_exception_occured() {
+            return Value::Unit;
+        } 
+
+        match func_value {
+            Value::Native(func) => match func(&arg_values) {
+                Ok(value) => value,
+                Err(err) => self.set_error(err, span, module.source.clone()),
+            },
             Value::Function(func) => {
                 if args.len() != func.args.len() {
-                    todo!("Error handling")
+                    return self.set_error(format!("Expected `{}` Arguments, Instead Found `{}`", func.args.len(), args.len()), span, module.source.clone())
                 }
 
                 let clos_count = func.clos
@@ -157,30 +196,37 @@ impl Engine {
                     .unwrap_or(0);
 
                 let mut local_count = 0;
-                if !std::iter::zip(func.args.clone(), arg_values)
-                    .all(|(arg, value)| self.fits_pattern(&value, &arg, &mut local_count)) {
-                        todo!("Error handling")
+
+                for (arg, value) in std::iter::zip(&func.args, arg_values) {
+                    if !self.fits_pattern(&value, arg, &mut local_count) {
+                        self.set_error("Function Argument Couldn't Be Matched", arg.span, module.source.clone());
+                    }
                 }
 
                 let result = self.evaluate(&func.expr, &func.modl);
                 self.remove_local(args.len() + clos_count);
 
-                let result = self.return_exception.clone().unwrap_or(result);
-                self.return_exception = None;
-                result
+                if let Some((Error { msg, span: inner_span, .. }, source)) = &self.error {
+                    self.set_call_error(msg.clone(), *inner_span, span, module.source.clone(), source.clone())
+                } else {
+                    let result = self.return_exception.clone().unwrap_or(result);
+                    self.return_exception = None;
+                    result
+                }
             },
-            _ => todo!("Error handling")
+            // TODO: Report type here
+            wrong_type => self.set_error(format!("`{wrong_type}` is not Function"), func.span, module.source.clone())
         }
     }
 
-    fn evaluate_sequence_expr(&mut self, sequnce_expr: &SequenceExpr, module: &Module) -> Value {
+    fn evaluate_sequence_expr(&mut self, sequnce_expr: &SequenceExpr, module: &ModuleValue) -> Value {
         let SequenceExpr { lhs, rhs } = sequnce_expr;
 
         self.evaluate(lhs, module);
         self.evaluate(rhs, module)
     }
 
-    fn evaluate_match_expr(&mut self, match_expr: &MatchExpr, module: &Module) -> Value {
+    fn evaluate_match_expr(&mut self, match_expr: &MatchExpr, module: &ModuleValue, span: Span) -> Value {
         let MatchExpr { expr, arms } = match_expr;
 
         let value = self.evaluate(expr, module);
@@ -194,15 +240,19 @@ impl Engine {
             self.remove_local(local_count);
         }
 
-        todo!("Error handling")
+        self.set_error("Inexhaustive Match Expression, None of the Arms were Matched", span, module.source.clone())
     }
 
     // TODO: Maybe pass value as value rather than reference
-    fn fits_pattern(&mut self, value: &Value, pattern: &Pattern, local_count: &mut usize) -> bool {
-        match (value, pattern) {
+    fn fits_pattern(&mut self, value: &Value, pattern: &Spanned<Pattern>, local_count: &mut usize) -> bool {
+        // if self.is_exception_occured() {
+        //     return true
+        // }
+        
+        match (value, &pattern.data) {
             (Value::String(lstring), Pattern::String(rstring)) => lstring == rstring,
             (Value::Integer(_) | Value::BigInteger(_), Pattern::NonNegativeInteger(rint)) => value == &Self::parse_integer(rint),
-            (Value::Integer(_) | Value::BigInteger(_), Pattern::NegativeInteger(rint)) => value == &-&Self::parse_integer(rint),
+            (Value::Integer(_) | Value::BigInteger(_), Pattern::NegativeInteger(rint)) => value == &(-&Self::parse_integer(rint)).unwrap(),
             (Value::Float(lfloat), Pattern::NonNegativeFloat(rfloat)) => lfloat == &rfloat.parse::<value::Float>().unwrap(),
             (Value::Float(lfloat), Pattern::NegativeFloat(rfloat)) => lfloat == &-rfloat.parse::<value::Float>().unwrap(),
             (Value::Bool(lbool), Pattern::Bool(rbool)) => lbool == rbool,
@@ -289,37 +339,48 @@ impl Engine {
         }
     } 
 
-    fn evaluate_import_expr(&mut self, import_expr: &ImportExpr) -> Value {
+    fn evaluate_import_expr(&mut self, import_expr: &ImportExpr, module: &ModuleValue, span: Span) -> Value {
         let ImportExpr { parts } = import_expr;
     
         let file_path = parts.join("/") + ".ank";
-        let file = std::fs::read_to_string(file_path).expect("Error handling");
-        let tokens = Lexer::new(&file).collect();
-        let astree = Parser::new(tokens).parse_module();
-        Value::Module(Self::evaluate_module(&astree))
+        let file = match std::fs::read_to_string(&file_path) {
+            Ok(value) => value,
+            Err(_) => return self.set_error(format!("Couldn't Load the File: `{file_path}`"), span, module.source.clone()),
+        };
+        let mut reporter = Reporter::new();
+        let tokens = handle_error!(Lexer::new(&file).collect(), "tokenizing", reporter, &file_path);
+        let astree = handle_error!(Parser::new(tokens).parse_module(), "tokenizing", reporter, &file_path);
+        Value::Module(self.evaluate_module(&file_path, &astree))
     }
 
-    fn evaluate_list_expr(&mut self, list_expr: &ListExpr, module: &Module) -> Value {
+    fn evaluate_list_expr(&mut self, list_expr: &ListExpr, module: &ModuleValue) -> Value {
         let ListExpr { exprs } = list_expr;
 
         Value::List(Rc::new(exprs.iter().map(|expr| self.evaluate(expr, module)).collect()))
     }
 
-    fn evaluate_access_expr(&mut self, access_expr: &AccessExpr, module: &Module) -> Value {
+    fn evaluate_access_expr(&mut self, access_expr: &AccessExpr, module: &ModuleValue) -> Value {
         let AccessExpr { expr, name } = access_expr;
 
-        let (Value::Module(map) | Value::Structure(map)) = self.evaluate(expr, module) else {
-            todo!("Error handling")
+        let value = self.evaluate(expr, module);
+
+        if self.is_exception_occured() {
+            return Value::Unit;
+        }
+
+        let (Value::Module(ModuleValue { map, .. }) | Value::Structure(map)) = value else {
+            // TODO: Report type here
+            return self.set_error("Field access is only available for `Module`s and `Structure`s", expr.span, module.source.clone())
         };
         
         let map = map.borrow();
-        match map.get(name) {
+        match map.get(&name.data) {
             Some(value) => value.clone(),
-            None => todo!("Error handling"),
+            None => self.set_error(format!("Value Has No Field Called `{}`", name.data), name.span, module.source.clone()),
         }
     }
 
-    fn evaluate_structure_expr(&mut self, structure_expr: &StructureExpr, module: &Module) -> Value {
+    fn evaluate_structure_expr(&mut self, structure_expr: &StructureExpr, module: &ModuleValue) -> Value {
         let StructureExpr { fields } = structure_expr;
 
         let structure = fields
@@ -330,32 +391,42 @@ impl Engine {
     }
 
 
-    fn evaluate_assignment_expr(&mut self, assignment_expr: &AssignmentExpr, module: &Module) -> Value {
+    fn evaluate_assignment_expr(&mut self, assignment_expr: &AssignmentExpr, module: &ModuleValue) -> Value {
         let AssignmentExpr { lhs, rhs } = assignment_expr;
 
         let rvalue = self.evaluate(rhs, module);
 
-
-        match &**lhs {
-            Expr::Identifier(ident) => self.assign(ident, rvalue, module),
+        match &lhs.data {
+            Expr::Identifier(ident) => self.assign(ident, rvalue, module, lhs.span),
             Expr::Access(AccessExpr { expr, name }) => {
-                let (Value::Module(map) | Value::Structure(map)) = self.evaluate(expr, module) else {
-                    todo!("Error handling")
+
+                let value = self.evaluate(expr, module);
+
+                if self.is_exception_occured() {
+                    return Value::Unit;
+                }
+        
+                let (Value::Module(ModuleValue { map, .. }) | Value::Structure(map)) = value else {
+                    return self.set_error("Field access is only available for `Module`s and `Structure`s", expr.span, module.source.clone())
                 }; 
 
                 let mut map = map.borrow_mut();
-                match map.get_mut(name) {
+                match map.get_mut(&name.data) {
                     Some(target) => *target = rvalue,
-                    None => todo!("Error handling"),
+                    None => {
+                        self.set_error(format!("Value Has No Field Called `{}`", name.data), name.span, module.source.clone());
+                    }
                 }
             }
-            _ => todo!("Error handling")
+            _ => {
+                self.set_error("Invalid Assignment Target", lhs.span, module.source.clone());
+            }
         }
     
         Value::Unit
     }
 
-    fn evaluate_while_expr(&mut self, while_expr: &WhileExpr, module: &Module) -> Value {
+    fn evaluate_while_expr(&mut self, while_expr: &WhileExpr, module: &ModuleValue) -> Value {
         let WhileExpr { cond, body } = while_expr;
 
         let mut result = Value::Unit;
@@ -370,28 +441,46 @@ impl Engine {
                 break; 
             }
 
-            if self.evaluate(cond, module).to_bool() {
-                self.evaluate(body, module);
-            } else {
+            let value = self.evaluate(cond, module);
+
+            if self.is_exception_occured() {
                 break
+            }
+
+            match value.to_bool() {
+                Ok(value) => if value {
+                    self.evaluate(body, module);
+                } else {
+                    break
+                },
+                Err(err) => {
+                    self.set_error(err, cond.span, module.source.clone());
+                }
             }
         }
 
         result
     }
 
-    fn evaluate_for_expr(&mut self, for_expr: &ForExpr, module: &Module) -> Value {
+    fn evaluate_for_expr(&mut self, for_expr: &ForExpr, module: &ModuleValue) -> Value {
         let ForExpr { patt, expr, body } = for_expr;
 
         let mut result = Value::Unit;
 
-        let mut iter: Box<dyn Iterator<Item = Value>> = match self.evaluate(expr, module) {
+        let value = self.evaluate(expr, module);
+
+        if self.is_exception_occured() {
+            return Value::Unit;
+        }
+
+        let mut iter: Box<dyn Iterator<Item = Value>> = match value {
             Value::Integer(int) => Box::new((0..int).map(Value::Integer)),
             Value::List(list) => {
                 let len = list.len();
                 Box::new((0..len).map(move |i| list[i].clone()))
             },
-            _ => todo!("Error handling")
+            // TODO: Report type here
+            not_iter => return self.set_error(format!("`{not_iter}` is not an Iterator"), expr.span, module.source.clone())
         };
     
         loop {
@@ -419,19 +508,30 @@ impl Engine {
         result
     }
 
-    fn evaluate_if_expr(&mut self, if_expr: &IfExpr, module: &Module) -> Value {
+    fn evaluate_if_expr(&mut self, if_expr: &IfExpr, module: &ModuleValue) -> Value {
         let IfExpr { cond, truu, fals } = if_expr;
     
-        if self.evaluate(cond, module).to_bool() {
-            self.evaluate(truu, module)
-        } else if let Some(fals) = fals {
-            self.evaluate(fals, module)
-        } else {
-            Value::Unit
+        let value = self.evaluate(cond, module);
+
+        if self.is_exception_occured() {
+            return Value::Unit;
         }
+
+        match value.to_bool() {
+            Ok(value) => if value {
+                self.evaluate(truu, module)
+            } else if let Some(fals) = fals {
+                self.evaluate(fals, module)
+            } else {
+                Value::Unit
+            },
+            Err(err) => self.set_error(err, cond.span, module.source.clone())
+        }
+
+        
     }
 
-    fn evaluate_return_expr(&mut self, return_expr: &ReturnExpr, module: &Module) -> Value {
+    fn evaluate_return_expr(&mut self, return_expr: &ReturnExpr, module: &ModuleValue) -> Value {
         let ReturnExpr { expr } = return_expr;
 
         let value = self.evaluate(expr, module);
@@ -441,7 +541,7 @@ impl Engine {
     }
 
 
-    fn evaluate_break_expr(&mut self, break_expr: &BreakExpr, module: &Module) -> Value {
+    fn evaluate_break_expr(&mut self, break_expr: &BreakExpr, module: &ModuleValue) -> Value {
         let BreakExpr { expr } = break_expr;
 
         let value = self.evaluate(expr, module);
@@ -456,51 +556,73 @@ impl Engine {
         Value::Unit
     }
 
-    fn evaluate_module_expr(module_expr: &ModuleExpr) -> Value {
+    fn evaluate_module_expr(&mut self, module_expr: &ModuleExpr, module: &ModuleValue) -> Value {
         let ModuleExpr { definitions } = module_expr;
         
-        let module = Self::evaluate_module(definitions);
+        let module = self.evaluate_module(&module.source, definitions);
 
         Value::Module(module)
     }
 
-    pub fn evaluate_module(definitions: &Vec<(String, Expr)>) -> Module {
-        let mut engine = Self::new();
-        let module = get_prelude();
+    pub fn evaluate_module(&mut self, source: &str, definitions: &Vec<(String, Spanned<Expr>)>) -> ModuleValue {
+        let mut engine = Self::new(); 
+        let module = get_prelude(source);
         for (name, expr) in definitions {
             let value = engine.evaluate(expr, &module);
-            module.borrow_mut().insert(name.clone(), value);
+            module.map.borrow_mut().insert(name.clone(), value);
         }
+
+        self.error = engine.error;        
 
         module
     }
 
-    pub fn run_from_entry(definitions: &Vec<(String, Expr)>, cli_args: &[String]) -> Value {
-        let module = Self::evaluate_module(definitions);
-        let main = module.borrow_mut().remove("main").expect("Error handling");
-        let Value::Function(func) = main else {
-            todo!("Error handling");
+    pub fn run_from_entry(source: &str, definitions: &Vec<(String, Spanned<Expr>)>, cli_args: &[String]) -> Value {
+        let mut engine = Self::new();
+        let module = engine.evaluate_module(source, definitions);
+        let main = match module.map.borrow_mut().remove("main") {
+            Some(main) => main,
+            // TODO: Better error reporting when main function is not provided
+            None => {
+                eprintln!("No Entry Point is Provided !!");
+                std::process::exit(1);
+            }
         };
 
-        let mut engine = Self::new();
-
-        match &func.args[..] {
-            [] => (),
-            [x] => {
-                let value = Value::List(Rc::new(
-                    cli_args
-                        .iter()
-                        .map(|arg| Value::String(arg.clone()))
-                        .collect()
-                ));
-                if !engine.fits_pattern(&value, x, &mut 0) {
-                    todo!("Error handling")
+        let result = match main {
+            Value::Function(func) => {
+                match &func.args[..] {
+                    [] => (),
+                    [x] => {
+                        let value = Value::List(Rc::new(
+                            cli_args
+                                .iter()
+                                .map(|arg| Value::String(arg.clone()))
+                                .collect()
+                        ));
+                        if !engine.fits_pattern(&value, x, &mut 0) {
+                            engine.set_error("CLI Arguments Don't Have the Expected Pattern", x.span, module.source.clone());
+                        }
+                    }
+                    [_, x, ..] => {
+                        engine.set_error(format!("Main Function can have at most 1 Argument, instead provided {}", func.args.len()), x.span, module.source.clone());
+                    }
                 }
+        
+                engine.evaluate(&func.expr, &module)
+            },
+    
+            _ => {
+                let span = definitions.iter().find(|(name, _)| name == "main").unwrap().1.span;
+                engine.set_error("Symbol Main has to Be a Function", span, module.source.clone())
             }
-            _   => todo!("Error handling")
-        }
+        };
 
-        // Pass cli args if 1 arg provided
-        engine.evaluate(&func.expr, &module)
+        if let Some((err, source)) = engine.error {
+            let mut reporter = Reporter::new();
+            reporter.report(&source, err, "runtime")
+        };
+
+        result
     }
 }

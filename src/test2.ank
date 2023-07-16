@@ -10,3 +10,6 @@ fac = def(n) =>
     | n => n * fac(n - 1)
 
 pi = 3
+
+error = def() => 
+    3 + "Merhaba"

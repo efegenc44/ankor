@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::span::{HasSpan, Spanned};
+
 #[derive(Clone)]
 pub enum Expr {
     Integer(String),
@@ -27,39 +29,41 @@ pub enum Expr {
     UnitValue
 }
 
+impl HasSpan for Expr {}
+
 #[derive(Clone)]
 pub struct LetExpr {
-    pub patt: Pattern,
-    pub vexp: Box<Expr>,
-    pub expr: Box<Expr>,
+    pub patt: Spanned<Pattern>,
+    pub vexp: Box<Spanned<Expr>>,
+    pub expr: Box<Spanned<Expr>>,
 }
 
 #[derive(Clone)]
 pub struct FunctionExpr {
-    pub args: Vec<Pattern>,
-    pub expr: Box<Expr>,
-    pub clos: Option<Vec<String>>
+    pub args: Vec<Spanned<Pattern>>,
+    pub expr: Box<Spanned<Expr>>,
+    pub clos: Option<Vec<Spanned<String>>>
 }
 
 #[derive(Clone)]
 pub struct ApplicationExpr {
-    pub func: Box<Expr>,
-    pub args: Vec<Expr>,
+    pub func: Box<Spanned<Expr>>,
+    pub args: Vec<Spanned<Expr>>,
 }
 
 #[derive(Clone)]
 pub struct SequenceExpr {
-    pub lhs: Box<Expr>,
-    pub rhs: Box<Expr>,
+    pub lhs: Box<Spanned<Expr>>,
+    pub rhs: Box<Spanned<Expr>>,
 }
 
 #[derive(Clone)]
 pub struct MatchExpr {
-    pub expr: Box<Expr>,
-    pub arms: Vec<(Pattern, Expr)>
+    pub expr: Box<Spanned<Expr>>,
+    pub arms: Vec<(Spanned<Pattern>, Spanned<Expr>)>
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Pattern {
     Identifier(String),
     String(String),
@@ -74,25 +78,27 @@ pub enum Pattern {
     Unit
 }
 
+impl HasSpan for Pattern {}
+
 pub type RestPattern = Option<String>; 
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ListPattern {
-    pub before_rest: Vec<Pattern>,
-    pub after_rest: Vec<Pattern>,
+    pub before_rest: Vec<Spanned<Pattern>>,
+    pub after_rest: Vec<Spanned<Pattern>>,
     pub rest: Option<RestPattern>
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct StructurePattern {
-    pub fields: HashMap<String, Option<Pattern>>,
+    pub fields: HashMap<String, Option<Spanned<Pattern>>>,
     pub rest: Option<RestPattern>
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct OrPattern {
-    pub lhs: Box<Pattern>,
-    pub rhs: Box<Pattern>,
+    pub lhs: Box<Spanned<Pattern>>,
+    pub rhs: Box<Spanned<Pattern>>,
 }
 
 #[derive(Clone)]
@@ -102,57 +108,57 @@ pub struct ImportExpr {
 
 #[derive(Clone)]
 pub struct AccessExpr {
-    pub expr: Box<Expr>,
-    pub name: String,
+    pub expr: Box<Spanned<Expr>>,
+    pub name: Spanned<String>,
 }
 
 #[derive(Clone)]
 pub struct ListExpr {
-    pub exprs: Vec<Expr>
+    pub exprs: Vec<Spanned<Expr>>
 }
 
 #[derive(Clone)]
 pub struct StructureExpr {
-    pub fields: Vec<(String, Expr)>
+    pub fields: Vec<(String, Spanned<Expr>)>
 }
 
 #[derive(Clone)]
 pub struct AssignmentExpr {
-    pub lhs: Box<Expr>,
-    pub rhs: Box<Expr>
+    pub lhs: Box<Spanned<Expr>>,
+    pub rhs: Box<Spanned<Expr>>
 }
 
 #[derive(Clone)]
 pub struct ReturnExpr {
-    pub expr: Box<Expr>
+    pub expr: Box<Spanned<Expr>>
 }
 #
 [derive(Clone)]
 pub struct BreakExpr {
-    pub expr: Box<Expr>
+    pub expr: Box<Spanned<Expr>>
 }
 
 #[derive(Clone)]
 pub struct ModuleExpr {
-    pub definitions: Vec<(String, Expr)>
+    pub definitions: Vec<(String, Spanned<Expr>)>
 }
 
 #[derive(Clone)]
 pub struct WhileExpr {
-    pub cond: Box<Expr>,
-    pub body: Box<Expr>
+    pub cond: Box<Spanned<Expr>>,
+    pub body: Box<Spanned<Expr>>
 }
 
 #[derive(Clone)]
 pub struct ForExpr {
-    pub patt: Pattern,
-    pub expr: Box<Expr>,
-    pub body: Box<Expr>
+    pub patt: Spanned<Pattern>,
+    pub expr: Box<Spanned<Expr>>,
+    pub body: Box<Spanned<Expr>>
 }
 
 #[derive(Clone)]
 pub struct IfExpr {
-    pub cond: Box<Expr>,
-    pub truu: Box<Expr>,
-    pub fals: Option<Box<Expr>>
+    pub cond: Box<Spanned<Expr>>,
+    pub truu: Box<Spanned<Expr>>,
+    pub fals: Option<Box<Spanned<Expr>>>
 }

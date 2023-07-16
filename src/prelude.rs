@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc, cell::RefCell};
 
-use crate::value::{Value, Module, self};
+use crate::value::{Value, self, ModuleValue};
 
 macro_rules! env {
     ($( $name:literal -> $func:expr )*) => {
@@ -11,14 +11,14 @@ macro_rules! env {
 macro_rules! two_values {
     ($values:ident) => {{
         let [left, right] = $values else { 
-            todo!("Error handling")
+            return Err("Expected two value".to_string())
         };
         (left, right)
     }};
 
     ($values:ident, $method:ident) => {{
         let [left, right] = $values else { 
-            todo!("Error handling")
+            return Err("Expected two value".to_string())
         };
         (left.$method(), right.$method())
     }};
@@ -27,7 +27,7 @@ macro_rules! two_values {
 macro_rules! one_value {
     ($values:ident) => {{
         let [left] = $values else { 
-            todo!("Error handling")
+            return Err("Expected one value".to_string())
         };
         left
     }};
@@ -35,24 +35,30 @@ macro_rules! one_value {
 
 macro_rules! unary {
     ($values:ident, $op:tt) => {{
-        let [left] = $values else { 
+        let [operand] = $values else { 
             unreachable!() 
         };
-        $op left
+        match ($op operand) {
+            Some(value) => Ok(value),
+            None => Err("Type Error at Unary Operation".to_string())
+        }    
     }};
 }
 
 macro_rules! binary {
     ($values:ident, $op:tt) => {{
         let (left, right) = two_values!($values);
-        left $op right
+        match (left $op right) {
+            Some(value) => Ok(value),
+            None => Err("Type Error at Binary Operation".to_string())
+        }
     }};
 }
 
 macro_rules! comparison {
     ($values:ident, $op:tt) => {{
         let (left, right) = two_values!($values);
-        Value::Bool(left $op right)
+        Ok(Value::Bool(left $op right))
     }};
 }
 
@@ -69,15 +75,15 @@ fn prelude() -> HashMap<String, Value> {
                 }
             }
             println!();
-            Value::Unit
+            Ok(Value::Unit)
         }
 
         "+" -> |values| binary!(values, +)
         "*" -> |values| binary!(values, *)
         "/" -> |values| binary!(values, /)
         "-" -> |values| match values {
-            [operand] => !operand,
-            [_, _]    => binary!(values, -),
+            [_]    => unary!(values, !),
+            [_, _] => binary!(values, -),
             _ => unreachable!()
         }
 
@@ -96,17 +102,20 @@ fn prelude() -> HashMap<String, Value> {
         "float" -> |values| {
             use Value::*;
 
-            match one_value!(values) {
+            Ok(match one_value!(values) {
                 Float(float) => Float(*float),
                 Integer(int) => Float(*int as value::Float),
                 // TODO: Proper float conversion
                 BigInteger(bigint) => Float(bigint.to_string().parse().unwrap()),
-                _ => todo!("Error handling")
-            }
+                _ => return Err("Value is not convertable to float".to_string())
+            })
         }
     }
 }
 
-pub fn get_prelude() -> Module {
-    Rc::new(RefCell::new(prelude()))
-} 
+pub fn get_prelude(source: &str) -> ModuleValue {
+    ModuleValue {
+        source: source.into(),
+        map: Rc::new(RefCell::new(prelude()))
+    }
+}
