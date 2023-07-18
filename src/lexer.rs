@@ -238,6 +238,7 @@ impl Lexer {
             "try" => Ktry,
             "handle" => Khandle,
             "raise" => Kraise,
+            "o" => Ko,
             _ => Identifier(symbol),
         }
         .with_span(Span::new(start_line, self.row, start_col, self.col))

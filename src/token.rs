@@ -54,6 +54,7 @@ pub enum Token {
     Ktry,
     Khandle,
     Kraise,
+    Ko,
 
     End,
 }
@@ -115,6 +116,7 @@ impl std::fmt::Display for Token {
             Ktry => write!(f, "try"),
             Khandle => write!(f, "handle"),
             Kraise => write!(f, "raise"),
+            Ko => write!(f, "o"),
             End => write!(f, "END"),
         }
     }

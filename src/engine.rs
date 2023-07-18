@@ -166,27 +166,21 @@ impl Engine {
         Value::Function(Rc::new(function_value))
     }
 
-    fn evaluate_application_expr(&mut self, application_expr: &ApplicationExpr, module: &ModuleValue, span: Span) -> Value {
-        let ApplicationExpr { func, args } = application_expr;
-
-        let arg_values: Vec<_> = args.iter().map(|expr| self.evaluate(expr, module)).collect();
-
-        let func_value = self.evaluate(func, module);
-
-        if self.is_exception_occured() {
-            return Value::Unit;
-        } 
-
+    fn call_function(&mut self, func_value: &Value, args: Vec<Value>, module: &ModuleValue, span: Span, func_span: Span) -> Value {
         match func_value {
-            Value::Native(func) => match func(&arg_values) {
+            Value::Native(func) => match func(&args) {
                 Ok(value) => value,
                 Err(err) => self.set_error(err, span, module.source.clone()),
+            },
+            Value::ComposedFunctions(left, right) => {
+                let first_pass = self.call_function(right, args, module, span, func_span);
+                self.call_function(left, vec![first_pass], module, span, func_span)
             },
             Value::Function(func) => {
                 if args.len() != func.args.len() {
                     return self.set_error(format!("Expected `{}` Arguments, Instead Found `{}`", func.args.len(), args.len()), span, module.source.clone())
                 }
-
+        
                 let clos_count = func.clos
                     .as_ref()
                     .map(|clos| {
@@ -196,18 +190,17 @@ impl Engine {
                         clos.len()
                     })
                     .unwrap_or(0);
-
+        
                 let mut local_count = 0;
-
-                for (arg, value) in std::iter::zip(&func.args, arg_values) {
+                for (arg, value) in std::iter::zip(&func.args, args) {
                     if !self.fits_pattern(&value, arg, &mut local_count) {
                         self.set_error("Function Argument Couldn't Be Matched", arg.span, module.source.clone());
                     }
                 }
-
+            
                 let result = self.evaluate(&func.expr, &func.modl);
                 self.remove_local(local_count + clos_count);
-
+        
                 if let Some((Error { msg, span: inner_span, .. }, source)) = &self.error {
                     self.set_call_error(msg.clone(), *inner_span, span, module.source.clone(), source.clone())
                 } else {
@@ -217,8 +210,22 @@ impl Engine {
                 }
             },
             // TODO: Report type here
-            wrong_type => self.set_error(format!("`{wrong_type}` is not Function"), func.span, module.source.clone())
+            wrong_type => self.set_error(format!("`{wrong_type}` is not Function"), func_span, module.source.clone())
         }
+    }
+
+    fn evaluate_application_expr(&mut self, application_expr: &ApplicationExpr, module: &ModuleValue, span: Span) -> Value {
+        let ApplicationExpr { func, args } = application_expr;
+
+        let arg_values: Vec<_> = args.iter().map(|expr| self.evaluate(expr, module)).collect();
+
+        let func_value = self.evaluate(func, module);
+
+        if self.is_exception_occured() {
+            return Value::Unit;
+        }
+
+        self.call_function(&func_value, arg_values, module, span, func.span)
     }
 
     fn evaluate_sequence_expr(&mut self, sequnce_expr: &SequenceExpr, module: &ModuleValue) -> Value {
@@ -449,7 +456,7 @@ impl Engine {
                 break
             }
 
-            match value.to_bool() {
+            match value.as_bool() {
                 Ok(value) => if value {
                     self.evaluate(body, module);
                 } else {
@@ -519,7 +526,7 @@ impl Engine {
             return Value::Unit;
         }
 
-        match value.to_bool() {
+        match value.as_bool() {
             Ok(value) => if value {
                 self.evaluate(truu, module)
             } else if let Some(fals) = fals {
@@ -529,8 +536,6 @@ impl Engine {
             },
             Err(err) => self.set_error(err, cond.span, module.source.clone())
         }
-
-        
     }
 
     fn evaluate_return_expr(&mut self, return_expr: &ReturnExpr, module: &ModuleValue) -> Value {
@@ -575,7 +580,7 @@ impl Engine {
 
         if self.is_exception_occured() {
             if let Some((Error { msg, span: inner_span, .. }, source)) = &self.error {
-                self.set_call_error(msg.clone(), inner_span.clone(), span, module.source.clone(), source.clone());
+                self.set_call_error(msg.clone(), *inner_span, span, module.source.clone(), source.clone());
             }
 
             return Value::Unit;
@@ -593,7 +598,7 @@ impl Engine {
         if self.error.is_some() {
             self.error = None;
 
-            return self.evaluate(hndl, module)            
+            self.evaluate(hndl, module)            
         } else {
             value
         }

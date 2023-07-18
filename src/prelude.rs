@@ -20,7 +20,7 @@ macro_rules! two_values {
         let [left, right] = $values else { 
             return Err("Expected two value".to_string())
         };
-        (left.$method(), right.$method())
+        (left.$method()?, right.$method()?)
     }};
 }
 
@@ -35,9 +35,7 @@ macro_rules! one_value {
 
 macro_rules! unary {
     ($values:ident, $op:tt) => {{
-        let [operand] = $values else { 
-            unreachable!() 
-        };
+        let operand = one_value!($values);
         match ($op operand) {
             Some(value) => Ok(value),
             None => Err("Type Error at Unary Operation".to_string())
@@ -78,6 +76,11 @@ fn prelude() -> HashMap<String, Value> {
             Ok(Value::Unit)
         }
 
+        "o" -> |values| {
+            let (left, right) = two_values!(values); 
+            Ok(Value::ComposedFunctions(Box::new(left.clone()), Box::new(right.clone())))
+        }
+        
         "+" -> |values| binary!(values, +)
         "*" -> |values| binary!(values, *)
         "/" -> |values| binary!(values, /)

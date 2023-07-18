@@ -32,6 +32,7 @@ pub enum Value {
     String(String),
     Bool(bool),
     Function(Function),
+    ComposedFunctions(Box<Value>, Box<Value>),
     Native(Native),
     Module(ModuleValue),
     List(List),
@@ -40,7 +41,7 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn to_bool(&self) -> Result<bool, String> {
+    pub fn as_bool(&self) -> Result<bool, String> {
         Ok(match self {
             Self::Bool(bool) => *bool,
             // TOOD: Report type here
@@ -60,6 +61,7 @@ impl std::fmt::Display for Value {
             String(string) => write!(f, "{string}"),
             Bool(bool) => write!(f, "{bool}"),
             Function(_) => write!(f, "<function>"),
+            ComposedFunctions(..) => write!(f, "<function>"),
             Native(_) => write!(f, "<native function>"),
             Module(_) => write!(f, "<module>"),
             List(list) => match &list[..] {
@@ -123,6 +125,7 @@ impl std::cmp::PartialEq for Value {
             (Structure(ls), Structure(rs)) => ls == rs,
             (Unit, Unit) => true,
             (Function(_), Function(_)) => false,
+            (ComposedFunctions(..), ComposedFunctions(..)) => false,
             (Native(_), Native(_)) => false,
             (Module(_), Module(_)) => false,
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),

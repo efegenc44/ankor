@@ -12,20 +12,24 @@ use crate::{
 
 macro_rules! binary_expr_precedence_level {
     ( $name:ident, $inferior:ident, $operators:pat, LEFT_ASSOC ) => {
-        binary_expr_precedence_level!($name, $inferior, $operators, while);
+        binary_expr_precedence_level!($name, $inferior, $operators, while, $inferior);
     };
 
     ( $name:ident, $inferior:ident, $operators:pat, NO_ASSOC ) => {
-        binary_expr_precedence_level!($name, $inferior, $operators, if);
+        binary_expr_precedence_level!($name, $inferior, $operators, if, $inferior);
     };
 
-    ( $name:ident, $inferior:ident, $operators:pat, $loop:tt ) => {
+    ( $name:ident, $inferior:ident, $operators:pat, RIGHT_ASSOC ) => {
+        binary_expr_precedence_level!($name, $inferior, $operators, if, $name);
+    };
+
+    ( $name:ident, $inferior:ident, $operators:pat, $loop:tt, $rhs:ident ) => {
         fn $name(&mut self) -> ParseResult<Spanned<Expr>> {
             let mut left = self.$inferior()?;
             $loop let current_token @ $operators = self.current_token() {
                 let op = Expr::Identifier(current_token.to_string()).with_span(self.get_span());
                 self.advance();
-                let right = self.$inferior()?;
+                let right = self.$rhs()?;
                 let left_span = left.span; 
                 left = Expr::Application(ApplicationExpr {
                     func: Box::new(op),
@@ -208,7 +212,8 @@ impl Parser {
         Ok(expr)
     }
 
-    binary_expr_precedence_level!(term,       call_expr,  Token::Star        | Token::Slash,        LEFT_ASSOC);
+    binary_expr_precedence_level!(compose,    call_expr,  Token::Ko,                                RIGHT_ASSOC);
+    binary_expr_precedence_level!(term,       compose,    Token::Star        | Token::Slash,        LEFT_ASSOC);
     binary_expr_precedence_level!(arithmetic, term,       Token::Plus        | Token::Minus,        LEFT_ASSOC);
     binary_expr_precedence_level!(comparison, arithmetic, Token::Less        | Token::LessEqual |
                                                           Token::Greater     | Token::GreaterEqual, NO_ASSOC);
