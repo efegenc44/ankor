@@ -5,7 +5,7 @@ use crate::{
         SequenceExpr, ApplicationExpr, Expr, FunctionExpr, LetExpr,
         MatchExpr, Pattern, ImportExpr, AccessExpr, ListExpr, StructureExpr, 
         AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, 
-        ModuleExpr, WhileExpr, BreakExpr, ForExpr, IfExpr, OrPattern
+        ModuleExpr, WhileExpr, BreakExpr, ForExpr, IfExpr, OrPattern, RaiseExpr, TryHandleExpr
     },
     token::Token, span::{Spanned, Span, HasSpan}, error::Error,
 };
@@ -143,6 +143,8 @@ impl Parser {
                 Kreturn => Expr::Return(self.return_expr()?),
                 Kbreak => Expr::Break(self.break_expr()?),
                 Kcontinue => self.continue_expr()?,
+                Kraise => Expr::Raise(self.raise_expr()?),
+                Ktry => Expr::TryHandle(self.tryhandle_expr()?),
                 LSquare => Expr::List(self.list_expr()?),
                 LCurly => Expr::Structure(self.structure_expr()?),
                 Bang | Minus => {
@@ -371,6 +373,26 @@ impl Parser {
         self.expect(Kcontinue)?;
 
         Ok(Expr::Continue)
+    }
+
+    fn raise_expr(&mut self) -> ParseResult<RaiseExpr> {
+        use Token::*;
+
+        self.expect(Kraise)?;
+        let expr = Box::new(self.expr()?);
+
+        Ok(RaiseExpr { expr })
+    }
+    
+    fn tryhandle_expr(&mut self) -> ParseResult<TryHandleExpr> {
+        use Token::*;
+
+        self.expect(Ktry)?;
+        let expr = Box::new(self.expr()?);
+        self.expect(Khandle)?;
+        let hndl = Box::new(self.expr()?);
+
+        Ok(TryHandleExpr { expr, hndl })
     }
 
     fn structure_expr(&mut self) -> ParseResult<StructureExpr> {

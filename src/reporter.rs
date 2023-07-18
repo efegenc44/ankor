@@ -29,7 +29,6 @@ impl Reporter {
         let lines = match self.lineses.get(source_name) {
             Some(lines) => lines.lines(),
             None => {
-                dbg!(source_name);
                 let file = std::fs::read_to_string(source_name).expect("Error reading a file.");
                 self.lineses.insert(source_name.to_string(), file);
                 self.lineses.get(source_name).unwrap().lines()

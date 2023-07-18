@@ -51,6 +51,9 @@ pub enum Token {
     Kreturn,
     Kbreak,
     Kcontinue,
+    Ktry,
+    Khandle,
+    Kraise,
 
     End,
 }
@@ -109,6 +112,9 @@ impl std::fmt::Display for Token {
             Kreturn => write!(f, "return"),
             Kbreak => write!(f, "break"),
             Kcontinue => write!(f, "continue"),
+            Ktry => write!(f, "try"),
+            Khandle => write!(f, "handle"),
+            Kraise => write!(f, "raise"),
             End => write!(f, "END"),
         }
     }

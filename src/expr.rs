@@ -26,6 +26,8 @@ pub enum Expr {
     Return(ReturnExpr),
     Break(BreakExpr),
     Continue,
+    Raise(RaiseExpr),
+    TryHandle(TryHandleExpr),
     UnitValue
 }
 
@@ -132,6 +134,7 @@ pub struct AssignmentExpr {
 pub struct ReturnExpr {
     pub expr: Box<Spanned<Expr>>
 }
+
 #
 [derive(Clone)]
 pub struct BreakExpr {
@@ -161,4 +164,15 @@ pub struct IfExpr {
     pub cond: Box<Spanned<Expr>>,
     pub truu: Box<Spanned<Expr>>,
     pub fals: Option<Box<Spanned<Expr>>>
+}
+
+#[derive(Clone)]
+pub struct RaiseExpr {
+    pub expr: Box<Spanned<Expr>>
+}
+
+#[derive(Clone)]
+pub struct TryHandleExpr {
+    pub expr: Box<Spanned<Expr>>,
+    pub hndl: Box<Spanned<Expr>>
 }

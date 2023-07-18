@@ -235,6 +235,9 @@ impl Lexer {
             "return" => Kreturn,
             "break" => Kbreak,
             "continue" => Kcontinue,
+            "try" => Ktry,
+            "handle" => Khandle,
+            "raise" => Kraise,
             _ => Identifier(symbol),
         }
         .with_span(Span::new(start_line, self.row, start_col, self.col))

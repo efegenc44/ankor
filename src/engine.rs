@@ -7,7 +7,7 @@ use crate::{
         AccessExpr, ApplicationExpr, Expr, FunctionExpr, ImportExpr,
         LetExpr, ListExpr, MatchExpr, Pattern, SequenceExpr, StructureExpr, 
         AssignmentExpr, ListPattern, StructurePattern, ReturnExpr, ModuleExpr, 
-        WhileExpr, BreakExpr, ForExpr, IfExpr, OrPattern,
+        WhileExpr, BreakExpr, ForExpr, IfExpr, OrPattern, RaiseExpr, TryHandleExpr,
     },
     lexer::Lexer, parser::Parser,
     prelude::get_prelude,
@@ -132,6 +132,8 @@ impl Engine {
             Return(return_expr) => self.evaluate_return_expr(return_expr, module),
             Break(break_expr) => self.evaluate_break_expr(break_expr, module),
             Continue => self.evaluate_continue_expr(),
+            Raise(raise_expr) => self.evaluate_raise_expr(raise_expr, module, expr.span),
+            TryHandle(tryhandle_expr) => self.evaluate_tryhandle_expr(tryhandle_expr, module),
             Module(module_expr) => self.evaluate_module_expr(module_expr, module),
         }
     }
@@ -204,7 +206,7 @@ impl Engine {
                 }
 
                 let result = self.evaluate(&func.expr, &func.modl);
-                self.remove_local(args.len() + clos_count);
+                self.remove_local(local_count + clos_count);
 
                 if let Some((Error { msg, span: inner_span, .. }, source)) = &self.error {
                     self.set_call_error(msg.clone(), *inner_span, span, module.source.clone(), source.clone())
@@ -535,6 +537,11 @@ impl Engine {
         let ReturnExpr { expr } = return_expr;
 
         let value = self.evaluate(expr, module);
+        
+        if self.is_exception_occured() {
+            return Value::Unit;
+        }
+
         self.return_exception = Some(value);
 
         Value::Unit
@@ -545,6 +552,11 @@ impl Engine {
         let BreakExpr { expr } = break_expr;
 
         let value = self.evaluate(expr, module);
+
+        if self.is_exception_occured() {
+            return Value::Unit;
+        }
+
         self.break_exception = Some(value);
 
         Value::Unit
@@ -554,6 +566,37 @@ impl Engine {
         self.continue_exception = true; 
         
         Value::Unit
+    }
+
+    fn evaluate_raise_expr(&mut self, raise_expr: &RaiseExpr, module: &ModuleValue, span: Span) -> Value {
+        let RaiseExpr { expr } = raise_expr;
+
+        let value = self.evaluate(expr, module);
+
+        if self.is_exception_occured() {
+            if let Some((Error { msg, span: inner_span, .. }, source)) = &self.error {
+                self.set_call_error(msg.clone(), inner_span.clone(), span, module.source.clone(), source.clone());
+            }
+
+            return Value::Unit;
+        }
+
+        self.set_error(value.to_string(), span, module.source.clone())
+    }
+
+
+    fn evaluate_tryhandle_expr(&mut self, tryhandle_expr: &TryHandleExpr, module: &ModuleValue) -> Value {
+        let TryHandleExpr { expr, hndl } = tryhandle_expr;
+
+        let value = self.evaluate(expr, module);
+
+        if self.error.is_some() {
+            self.error = None;
+
+            return self.evaluate(hndl, module)            
+        } else {
+            value
+        }
     }
 
     fn evaluate_module_expr(&mut self, module_expr: &ModuleExpr, module: &ModuleValue) -> Value {
@@ -591,6 +634,17 @@ impl Engine {
 
         let result = match main {
             Value::Function(func) => {
+                let clos_count = func.clos
+                    .as_ref()
+                    .map(|clos| {
+                        for (arg, value) in clos {
+                            engine.define_local(arg.clone(), value.clone());
+                        }
+                        clos.len()
+                    })
+                    .unwrap_or(0);
+               
+                let mut local_count = 0;
                 match &func.args[..] {
                     [] => (),
                     [x] => {
@@ -600,7 +654,7 @@ impl Engine {
                                 .map(|arg| Value::String(arg.clone()))
                                 .collect()
                         ));
-                        if !engine.fits_pattern(&value, x, &mut 0) {
+                        if !engine.fits_pattern(&value, x, &mut local_count) {
                             engine.set_error("CLI Arguments Don't Have the Expected Pattern", x.span, module.source.clone());
                         }
                     }
@@ -608,8 +662,18 @@ impl Engine {
                         engine.set_error(format!("Main Function can have at most 1 Argument, instead provided {}", func.args.len()), x.span, module.source.clone());
                     }
                 }
-        
-                engine.evaluate(&func.expr, &module)
+
+                let result = engine.evaluate(&func.expr, &module);
+                engine.remove_local(local_count + clos_count);
+                
+                // if let Some((Error { msg, span: inner_span, .. }, source)) = &engine.error {
+                //     let span = definitions.iter().find(|(name, _)| name == "main").unwrap().1.span;
+                //     engine.set_call_error(msg.clone(), *inner_span, span, module.source.clone(), source.clone())
+                // } else {
+                    let result = engine.return_exception.clone().unwrap_or(result);
+                    engine.return_exception = None;
+                    result
+                // }
             },
     
             _ => {
