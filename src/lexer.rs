@@ -40,7 +40,9 @@ impl Iterator for Lexer {
             '=' => if self.peek_is('=') { DoubleEqual } else 
                    if self.peek_is('>') { FatArrow } else { Equal },
             '!' => if self.peek_is('=') { BangEqual } else { Bang },
-            '<' => if self.peek_is('=') { LessEqual } else { Less },
+            #[allow(clippy::suspicious_else_formatting)]
+            '<' => if self.peek_is('=') { LessEqual } else
+                   if self.peek_is('-') { LeftArrow } else { Less },
             '>' => if self.peek_is('=') { GreaterEqual } else { Greater },
             ';' => Semicolon,
             ':' => Colon,

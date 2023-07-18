@@ -80,6 +80,11 @@ fn prelude() -> HashMap<String, Value> {
             let (left, right) = two_values!(values); 
             Ok(Value::ComposedFunctions(Box::new(left.clone()), Box::new(right.clone())))
         }
+
+        "<-" -> |values| {
+            let (left, right) = two_values!(values); 
+            Ok(Value::ParitalFunction(Box::new(left.clone()), Box::new(right.clone())))
+        }
         
         "+" -> |values| binary!(values, +)
         "*" -> |values| binary!(values, *)

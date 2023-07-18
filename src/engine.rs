@@ -176,6 +176,14 @@ impl Engine {
                 let first_pass = self.call_function(right, args, module, span, func_span);
                 self.call_function(left, vec![first_pass], module, span, func_span)
             },
+            Value::ParitalFunction(left, right) => {
+                let args = {
+                    let mut argsx = vec![*right.clone()];
+                    argsx.extend(args);
+                    argsx
+                };
+                self.call_function(left, args, module, span, func_span)
+            },
             Value::Function(func) => {
                 if args.len() != func.args.len() {
                     return self.set_error(format!("Expected `{}` Arguments, Instead Found `{}`", func.args.len(), args.len()), span, module.source.clone())

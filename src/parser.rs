@@ -220,7 +220,8 @@ impl Parser {
         Ok(expr)
     }
 
-    binary_expr_precedence_level!(compose,    call_expr,  Token::Ko,                                RIGHT_ASSOC);
+    binary_expr_precedence_level!(partialapp, call_expr,  Token::LeftArrow,                         LEFT_ASSOC);
+    binary_expr_precedence_level!(compose,    partialapp, Token::Ko,                                RIGHT_ASSOC);
     binary_expr_precedence_level!(term,       compose,    Token::Star        | Token::Slash,        LEFT_ASSOC);
     binary_expr_precedence_level!(arithmetic, term,       Token::Plus        | Token::Minus,        LEFT_ASSOC);
     binary_expr_precedence_level!(comparison, arithmetic, Token::Less        | Token::LessEqual |

@@ -33,6 +33,7 @@ pub enum Value {
     Bool(bool),
     Function(Function),
     ComposedFunctions(Box<Value>, Box<Value>),
+    ParitalFunction(Box<Value>, Box<Value>),
     Native(Native),
     Module(ModuleValue),
     List(List),
@@ -62,6 +63,7 @@ impl std::fmt::Display for Value {
             Bool(bool) => write!(f, "{bool}"),
             Function(_) => write!(f, "<function>"),
             ComposedFunctions(..) => write!(f, "<function>"),
+            ParitalFunction(..) => write!(f, "<function>"),
             Native(_) => write!(f, "<native function>"),
             Module(_) => write!(f, "<module>"),
             List(list) => match &list[..] {
@@ -126,6 +128,7 @@ impl std::cmp::PartialEq for Value {
             (Unit, Unit) => true,
             (Function(_), Function(_)) => false,
             (ComposedFunctions(..), ComposedFunctions(..)) => false,
+            (ParitalFunction(..), ParitalFunction(..)) => false,
             (Native(_), Native(_)) => false,
             (Module(_), Module(_)) => false,
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
