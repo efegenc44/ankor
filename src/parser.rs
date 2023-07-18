@@ -163,6 +163,14 @@ impl Parser {
                     self.advance();
                     if self.optional(RParen) {
                         Expr::UnitValue
+                    } else if let Plus | Minus | Star | Slash | Less |
+                           LessEqual | Greater | GreaterEqual |
+                           DoubleEqual | BangEqual | Kand | Kor = self.current_token()
+                    {
+                        let op = Expr::Identifier(self.current_token().to_string());
+                        self.advance();
+                        self.expect(RParen)?;
+                        op
                     } else {
                         let expr = self.expr()?;
                         self.expect(RParen)?;
