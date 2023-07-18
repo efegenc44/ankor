@@ -11,7 +11,7 @@ mod error;
 
 use std::{io::{self, Write}, env::args, fs};
 
-use engine::Engine;
+use engine::{Engine, Exception};
 use lexer::Lexer;
 use parser::Parser;
 use prelude::get_prelude;
@@ -62,7 +62,11 @@ fn from_file(file_path: &str, cli_args: &[String]) {
     let tokens = handle_error!(Lexer::new(&file).collect(), "tokenizing", reporter, file_path);
     let astree = handle_error!(Parser::new(tokens).parse_module(), "parsing", reporter, file_path);
     let result = Engine::run_from_entry(file_path, &astree, cli_args);
-    println!("= {result}");
+    match result {
+        Ok(result) => println!("= {result}"),
+        Err(Exception::Exception(exc)) => reporter.report(&exc.1, exc.0, "runtime"),
+        _ => unreachable!()
+    }
 }
 
 fn repl() -> io::Result<()> {
@@ -91,14 +95,14 @@ fn repl() -> io::Result<()> {
         let astree = handle_error_repl!(Parser::new(tokens).parse(), "parsing", input, reporter);
         let result = engine.evaluate(&astree, &prelude);
         
-        if let Some((err, source)) = engine.error {
-            engine.error = None;
-            
-            reporter.lineses.insert("REPL".to_string(), input.to_string());
-            reporter.report(&source, err, "runtime")
-        } else {
-            println!("= {result}");
-        };
+        match result {
+            Ok(result) => println!("= {result}"),
+            Err(Exception::Exception(exc)) => {
+                reporter.lineses.insert("REPL".to_string(), input.to_string());
+                reporter.report(&exc.1, exc.0, "runtime")
+            },
+            _ => unreachable!()
+        }
     }
 
     Ok(())
