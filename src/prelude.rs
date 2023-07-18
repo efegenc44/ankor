@@ -121,9 +121,85 @@ fn prelude() -> HashMap<String, Value> {
     }
 }
 
+fn list() -> HashMap<String, Value> {
+    env! {
+        "get" -> |values| {
+            let (list, index) = two_values!(values);
+            let list = list.as_list()?;
+            match index {
+                Value::Integer(int) => match list.borrow().get(*int as usize) {
+                    Some(value) => Ok(value.clone()),
+                    None => Err("Index out of bounds".to_string()),
+                },
+                // TODO: Big Integer list indexing
+                Value::BigInteger(_) => Err("Cannot index using BigInteger".to_string()),
+                _ => Err("Index has to be Integer".to_string())
+            }
+        }
+
+        "push" -> |values| {
+            let [list, args @ ..] = values else {
+                return Err("Expected at least List".to_string())
+            };
+
+            let list = list.as_list()?;
+            list.borrow_mut().extend_from_slice(args);
+
+            Ok(Value::Unit)
+        }
+
+        "append" -> |values| {
+            let [list, args @ ..] = values else {
+                return Err("Expected at least List".to_string())
+            };
+
+            let list = list.as_list()?;
+            list.borrow_mut().extend_from_slice(args);
+
+            Ok(Value::List(list))
+        }
+
+        "pop" -> |values| {
+            let list = one_value!(values).as_list()?;
+            let mut list = list.borrow_mut();
+            list.pop().ok_or("List is empty, nothing to pop".to_string())
+        }
+    }
+}
+
+fn string() -> HashMap<String, Value> {
+    env! {
+        "concat" -> |values| {
+            let mut string = String::new();
+            for value in values {
+                string += value.as_str()?;
+            }
+            Ok(Value::String(string))
+        }
+    }
+}
+
 pub fn get_prelude(source: &str) -> ModuleValue {
+    let mut prelude = prelude();
+    
+    prelude.insert(
+        "List".to_string(), 
+        Value::Module(ModuleValue {
+            source: source.into(),
+            map: Rc::new(RefCell::new(list()))
+        })
+    );
+
+    prelude.insert(
+        "String".to_string(), 
+        Value::Module(ModuleValue {
+            source: source.into(),
+            map: Rc::new(RefCell::new(string()))
+        })
+    );
+
     ModuleValue {
         source: source.into(),
-        map: Rc::new(RefCell::new(prelude()))
+        map: Rc::new(RefCell::new(prelude))
     }
 }

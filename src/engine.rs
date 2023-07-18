@@ -277,6 +277,7 @@ impl Engine {
             (Value::List(list), Pattern::List(ListPattern { before_rest, after_rest, rest })) => {
                 match rest {
                     Some(name) => {
+                        let list = list.borrow();
                         let result = before_rest.len() + after_rest.len() <= list.len() &&
                             std::iter::zip(list.iter(), before_rest)
                                 .all(|(value, pattern)| self.fits_pattern(value, pattern, local_count)) &&
@@ -285,15 +286,18 @@ impl Engine {
                     
                         if let Some(name) = name {
                             let rest = &list[before_rest.len()..list.len() - after_rest.len()];
-                            self.define_local(name.clone(), Value::List(Rc::new(rest.to_vec())));
+                            self.define_local(name.clone(), Value::List(Rc::new(RefCell::new(rest.to_vec()))));
                             *local_count += 1;
                         };
 
                         result
                     },
-                    None => list.len() == before_rest.len() &&
-                            std::iter::zip(list.iter(), before_rest)
-                                .all(|(value, pattern)| self.fits_pattern(value, pattern, local_count))
+                    None => {
+                        let list = list.borrow();
+                        list.len() == before_rest.len() &&
+                        std::iter::zip(list.iter(), before_rest)
+                            .all(|(value, pattern)| self.fits_pattern(value, pattern, local_count))
+                    }
                 }
             }
             (Value::Structure(structure), Pattern::Structure(StructurePattern { fields, rest })) => {
@@ -373,7 +377,7 @@ impl Engine {
     fn evaluate_list_expr(&mut self, list_expr: &ListExpr, module: &ModuleValue) -> Value {
         let ListExpr { exprs } = list_expr;
 
-        Value::List(Rc::new(exprs.iter().map(|expr| self.evaluate(expr, module)).collect()))
+        Value::List(Rc::new(RefCell::new(exprs.iter().map(|expr| self.evaluate(expr, module)).collect())))
     }
 
     fn evaluate_access_expr(&mut self, access_expr: &AccessExpr, module: &ModuleValue) -> Value {
@@ -492,10 +496,7 @@ impl Engine {
 
         let mut iter: Box<dyn Iterator<Item = Value>> = match value {
             Value::Integer(int) => Box::new((0..int).map(Value::Integer)),
-            Value::List(list) => {
-                let len = list.len();
-                Box::new((0..len).map(move |i| list[i].clone()))
-            },
+            Value::List(list) => Box::new(list.borrow().clone().into_iter()),
             // TODO: Report type here
             not_iter => return self.set_error(format!("`{not_iter}` is not an Iterator"), expr.span, module.source.clone())
         };
@@ -661,12 +662,12 @@ impl Engine {
                 match &func.args[..] {
                     [] => (),
                     [x] => {
-                        let value = Value::List(Rc::new(
+                        let value = Value::List(Rc::new(RefCell::new(
                             cli_args
                                 .iter()
                                 .map(|arg| Value::String(arg.clone()))
                                 .collect()
-                        ));
+                        )));
                         if !engine.fits_pattern(&value, x, &mut local_count) {
                             engine.set_error("CLI Arguments Don't Have the Expected Pattern", x.span, module.source.clone());
                         }

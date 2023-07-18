@@ -4,7 +4,7 @@ use apnum::BigInt;
 
 use crate::{expr::{Expr, Pattern}, span::Spanned};
 
-pub type List = Rc<Vec<Value>>;
+pub type List = Rc<RefCell<Vec<Value>>>;
 pub type Native = fn(&[Value]) -> Result<Value, String>;
 pub type Function = Rc<FunctionValue>; 
 pub type Structure = Rc<RefCell<HashMap<String, Value>>>;
@@ -49,6 +49,22 @@ impl Value {
             _ => return Err("Expected `Bool`".to_string())
         })
     }
+
+    pub fn as_list(&self) -> Result<List, String> {
+        Ok(match self {
+            Self::List(list) => list.clone(),
+            // TOOD: Report type here
+            _ => return Err("Expected `List`".to_string())
+        })
+    }
+
+    pub fn as_str(&self) -> Result<&str, String> {
+        Ok(match self {
+            Self::String(string) => string,
+            // TOOD: Report type here
+            _ => return Err("Expected `String`".to_string())
+        })
+    }
 }
 
 impl std::fmt::Display for Value {
@@ -66,7 +82,7 @@ impl std::fmt::Display for Value {
             ParitalFunction(..) => write!(f, "<function>"),
             Native(_) => write!(f, "<native function>"),
             Module(_) => write!(f, "<module>"),
-            List(list) => match &list[..] {
+            List(list) => match &list.borrow()[..] {
                 [] => write!(f, "[]"),
                 [x] => write!(f, "[{x}]"),
                 [x, xs @ .., l] => {
