@@ -34,20 +34,14 @@ macro_rules! one_value {
 macro_rules! unary {
     ($values:ident, $op:tt) => {{
         let operand = one_value!($values);
-        match ($op operand) {
-            Some(value) => Ok(value),
-            None => Err(format!("Type Error at Unary Operation: {}", operand.type_name()))
-        }    
+        $op operand
     }};
 }
 
 macro_rules! binary {
     ($values:ident, $op:tt) => {{
         let (left, right) = two_values!($values);
-        match (left $op right) {
-            Some(value) => Ok(value),
-            None => Err(format!("Type Error at Binary Operation: {}, {}", left.type_name(), right.type_name()))
-        }
+        left $op right
     }};
 }
 

@@ -174,110 +174,120 @@ impl std::cmp::PartialOrd for Value {
 }
 
 impl std::ops::Add for &Value {
-    type Output = Option<Value>;
+    type Output = Result<Value, String>;
 
     fn add(self, rhs: Self) -> Self::Output {
         use Value::*;
 
-        Some(match (self, rhs) {
+        Ok(match (self, rhs) {
             (Integer(lint), Integer(rint)) => Integer(lint + rint),
             (Float(lfloat), Float(rfloat)) => Float(lfloat + rfloat),
-            _ => return None 
+            _ => return Err(format!("Type Error at Binary Operation +: {}, {}", self.type_name(), rhs.type_name()))
         })
     }
 }
 
 impl std::ops::Sub for &Value {
-    type Output = Option<Value>;
+    type Output = Result<Value, String>;
 
     fn sub(self, rhs: Self) -> Self::Output {
         use Value::*;
 
-        Some(match (self, rhs) {
+        Ok(match (self, rhs) {
             (Integer(lint), Integer(rint)) => Integer(lint - rint),
             (Float(lfloat), Float(rfloat)) => Float(lfloat - rfloat),
-            _ => return None
+            _ => return Err(format!("Type Error at Binary Operation -: {}, {}", self.type_name(), rhs.type_name()))
         })
     }
 }
 
 impl std::ops::Mul for &Value {
-    type Output = Option<Value>;
+    type Output = Result<Value, String>;
 
     fn mul(self, rhs: Self) -> Self::Output {
         use Value::*;
 
-        Some(match (self, rhs) {
+        Ok(match (self, rhs) {
             (Integer(lint), Integer(rint)) => Integer(lint * rint),
             (Float(lfloat), Float(rfloat)) => Float(lfloat * rfloat),
-            _ => return None
+            _ => return Err(format!("Type Error at Binary Operation *: {}, {}", self.type_name(), rhs.type_name()))
         })
     }
 }
 
 impl std::ops::Div for &Value {
-    type Output = Option<Value>;
+    type Output = Result<Value, String>;
 
     fn div(self, rhs: Self) -> Self::Output {
         use Value::*;
 
-        Some(match (self, rhs) {
-            (Integer(lint), Integer(rint)) => Integer(lint / rint),
-            (Float(lfloat), Float(rfloat)) => Float(lfloat / rfloat),
-            _ => return None
+        Ok(match (self, rhs) {
+            (Integer(lint), Integer(rint)) => {
+                if rint == &integer::Integer::Small(0) {
+                    return Err("Attempt to Divide by Zero".to_string())
+                }
+                Integer(lint / rint)
+            },
+            (Float(lfloat), Float(rfloat)) => {
+                if rfloat == &0. {
+                    return Err("Attempt to Divide by Zero".to_string())
+                }
+                Float(lfloat / rfloat)
+            },
+            _ => return Err(format!("Type Error at Binary Operation /: {}, {}", self.type_name(), rhs.type_name()))
         })
     }
 }
 
 impl std::ops::BitAnd for &Value {
-    type Output = Option<Value>;
+    type Output = Result<Value, String>;
 
     fn bitand(self, rhs: Self) -> Self::Output {
         use Value::*;
 
-        Some(match (self, rhs) {
+        Ok(match (self, rhs) {
             (Bool(lbool), Bool(rbool)) => Bool(lbool & rbool),
-            _ => return None
+            _ => return Err(format!("Type Error at Binary Operation and: {}, {}", self.type_name(), rhs.type_name()))
         })
     }
 }
 
 impl std::ops::BitOr for &Value {
-    type Output = Option<Value>;
+    type Output = Result<Value, String>;
 
     fn bitor(self, rhs: Self) -> Self::Output {
         use Value::*;
 
-        Some(match (self, rhs) {
+        Ok(match (self, rhs) {
             (Bool(lbool), Bool(rbool)) => Bool(lbool | rbool),
-            _ => return None
+            _ => return Err(format!("Type Error at Binary Operation or: {}, {}", self.type_name(), rhs.type_name()))
         })
     }
 }
 
 impl std::ops::Neg for &Value {
-    type Output = Option<Value>;
+    type Output = Result<Value, String>;
 
     fn neg(self) -> Self::Output {
         use Value::*;
 
-        Some(match self {
+        Ok(match self {
             Integer(int) => Integer(-int),
             Float(float) => Float(-float),
-            _ => return None
+            _ => return Err(format!("Type Error at Unary Operation -: {}", self.type_name()))
         })
     }
 }
 
 impl std::ops::Not for &Value {
-    type Output = Option<Value>;
+    type Output = Result<Value, String>;
 
     fn not(self) -> Self::Output {
         use Value::*;
 
-        Some(match self {
+        Ok(match self {
             Bool(bool) => Bool(!bool),
-            _ => return None
+            _ => return Err(format!("Type Error at Unary Operation !: {}", self.type_name()))
         })
     }
 }
