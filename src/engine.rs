@@ -42,14 +42,14 @@ impl Engine {
         }
     }
 
-    fn error<S>(&mut self, msg: S, span: Span, source: String) -> EvaluationResult 
+    fn error<S>(msg: S, span: Span, source: String) -> EvaluationResult 
     where
         S: Into<String> 
     {
         Err(Exception::Exception((Error::new(msg, span, None), source)))
     }
 
-    fn call_error<S>(&mut self, msg: S, span: Span, call_site: Span, call_site_source: String, source: String) -> EvaluationResult 
+    fn call_error<S>(msg: S, span: Span, call_site: Span, call_site_source: String, source: String) -> EvaluationResult 
     where
         S: Into<String> 
     {
@@ -66,7 +66,7 @@ impl Engine {
 
         match module.map.borrow().get(ident) {
             Some(value) => Ok(value.clone()),
-            None => self.error(format!("Undefined Symbol `{ident}`"), span, module.source.clone())
+            None => Self::error(format!("Undefined Symbol `{ident}`"), span, module.source.clone())
         }
     }
 
@@ -81,7 +81,7 @@ impl Engine {
                 *target = value;
                 return Ok(Value::Unit)
             },
-            None => self.error(format!("Undefined Symbol `{ident}`"), span, module.source.clone())
+            None => Self::error(format!("Undefined Symbol `{ident}`"), span, module.source.clone())
         } 
     }
 
@@ -131,7 +131,7 @@ impl Engine {
         let mut local_count = 0;
         if !self.fits_pattern(&value, patt, &mut local_count) {
             self.remove_local(local_count);
-            return self.error("Pattern Couldn't Be Matched at Let Expression", patt.span, module.source.clone())
+            return Self::error("Pattern Couldn't Be Matched at Let Expression", patt.span, module.source.clone())
         }
         let result = self.evaluate(expr, module);
         self.remove_local(local_count);
@@ -164,7 +164,7 @@ impl Engine {
         match func_value {
             Function::Native(func) => match func(&args) {
                 Ok(value) => Ok(value),
-                Err(err) => self.error(err, span, module.source.clone()),
+                Err(err) => Self::error(err, span, module.source.clone()),
             },
             Function::Composed(left, right) => {
                 let first_pass = self.call_function(right, args, module, span, func_span).map_err(|mut exc| {
@@ -190,7 +190,7 @@ impl Engine {
             },
             Function::Standart(func) => {
                 if args.len() != func.args.len() {
-                    return self.error(format!("Expected `{}` Arguments, Instead Found `{}`", func.args.len(), args.len()), span, module.source.clone())
+                    return Self::error(format!("Expected `{}` Arguments, Instead Found `{}`", func.args.len(), args.len()), span, module.source.clone())
                 }
         
                 let clos_count = func.clos
@@ -207,7 +207,7 @@ impl Engine {
                 for (arg, value) in std::iter::zip(&func.args, args) {
                     if !self.fits_pattern(&value, arg, &mut local_count) {
                         self.remove_local(clos_count + local_count);
-                        return self.error("Function Argument Couldn't Be Matched", arg.span, module.source.clone());
+                        return Self::error("Function Argument Couldn't Be Matched", arg.span, module.source.clone());
                     }
                 }
             
@@ -220,7 +220,7 @@ impl Engine {
                         Exception::Return(value) => Ok(value),
                         Exception::Exception((
                             Error { msg, span: inner_span, .. }, source
-                        )) => self.call_error(msg.clone(), inner_span, span, module.source.clone(), source.clone()),
+                        )) => Self::call_error(msg.clone(), inner_span, span, module.source.clone(), source.clone()),
                         _ => Err(exc)
                     },
                 }
@@ -236,7 +236,7 @@ impl Engine {
 
         let func_value = match self.evaluate(func, module)?.as_function() {
             Ok(func) => func,
-            Err(msg) => return self.error(msg, span, module.source.clone()),
+            Err(msg) => return Self::error(msg, span, module.source.clone()),
         };
 
         self.call_function(&func_value, arg_values, module, span, func.span)
@@ -263,7 +263,7 @@ impl Engine {
             self.remove_local(local_count);
         }
 
-        self.error("Inexhaustive Match Expression, None of the Arms were Matched", span, module.source.clone())
+        Self::error("Inexhaustive Match Expression, None of the Arms were Matched", span, module.source.clone())
     }
 
     fn fits_pattern(&mut self, value: &Value, pattern: &Spanned<Pattern>, local_count: &mut usize) -> bool {
@@ -367,7 +367,7 @@ impl Engine {
         let file_path = parts.join("/") + ".ank";
         let file = match std::fs::read_to_string(&file_path) {
             Ok(value) => value,
-            Err(_) => return self.error(format!("Couldn't Load the File: `{file_path}`"), span, module.source.clone()),
+            Err(_) => return Self::error(format!("Couldn't Load the File: `{file_path}`"), span, module.source.clone()),
         };
         let mut reporter = Reporter::new();
         let tokens = handle_error!(Lexer::new(&file).collect(), "tokenizing", reporter, &file_path);
@@ -386,13 +386,13 @@ impl Engine {
 
         let value = self.evaluate(expr, module)?;
         let (Value::Module(Module { map, .. }) | Value::Structure(map)) = value else {
-            return self.error(format!("Field access is only available for `Module`s and `Structure`s, not for `{}`", value.type_name()), expr.span, module.source.clone())
+            return Self::error(format!("Field access is only available for `Module`s and `Structure`s, not for `{}`", value.type_name()), expr.span, module.source.clone())
         };
         
         let map = map.borrow();
         match map.get(&name.data) {
             Some(value) => Ok(value.clone()),
-            None => self.error(format!("Value Has No Field Called `{}`", name.data), name.span, module.source.clone()),
+            None => Self::error(format!("Value Has No Field Called `{}`", name.data), name.span, module.source.clone()),
         }
     }
 
@@ -419,7 +419,7 @@ impl Engine {
 
                 let value = self.evaluate(expr, module)?;
                 let (Value::Module(Module { map, .. }) | Value::Structure(map)) = value else {
-                    return self.error(format!("Field access is only available for `Module`s and `Structure`s, not for `{}`", value.type_name()), expr.span, module.source.clone())
+                    return Self::error(format!("Field access is only available for `Module`s and `Structure`s, not for `{}`", value.type_name()), expr.span, module.source.clone())
                 }; 
 
                 let mut map = map.borrow_mut();
@@ -428,10 +428,10 @@ impl Engine {
                         *target = rvalue;
                         Ok(Value::Unit)
                     },
-                    None => self.error(format!("Value Has No Field Called `{}`", name.data), name.span, module.source.clone())
+                    None => Self::error(format!("Value Has No Field Called `{}`", name.data), name.span, module.source.clone())
                 }
             }
-            _ => self.error("Invalid Assignment Target", lhs.span, module.source.clone())
+            _ => Self::error("Invalid Assignment Target", lhs.span, module.source.clone())
         }
     }
 
@@ -451,7 +451,7 @@ impl Engine {
                 } else {
                     break Ok(Value::Unit)
                 },
-                Err(err) => break self.error(err, cond.span, module.source.clone())
+                Err(err) => break Self::error(err, cond.span, module.source.clone())
             }
         }
 
@@ -463,7 +463,7 @@ impl Engine {
         let mut iter: Box<dyn Iterator<Item = Value>> = match self.evaluate(expr, module)? {
             Value::Range(iter) => Box::new(iter),
             Value::List(list) => Box::new(list.borrow().clone().into_iter()),
-            not_iter => return self.error(format!("`{}` is not an Iterator", not_iter.type_name()), expr.span, module.source.clone())
+            not_iter => return Self::error(format!("`{}` is not an Iterator", not_iter.type_name()), expr.span, module.source.clone())
         };
     
         loop {
@@ -472,7 +472,7 @@ impl Engine {
                 Some(value) => {
                     if !self.fits_pattern(&value, patt, &mut local_count) {
                         self.remove_local(local_count);
-                        return self.error(format!("Loop variable didn't match the pattern"), patt.span, module.source.clone())
+                        return Self::error(format!("Loop variable didn't match the pattern"), patt.span, module.source.clone())
                     };
                     let result = self.evaluate(body, module);
                     self.remove_local(local_count);
@@ -501,7 +501,7 @@ impl Engine {
             } else {
                 Ok(Value::Unit)
             },
-            Err(err) => self.error(err, cond.span, module.source.clone())
+            Err(err) => Self::error(err, cond.span, module.source.clone())
         }
     }
 
@@ -528,7 +528,7 @@ impl Engine {
         let RaiseExpr { expr } = raise_expr;
 
         let value = self.evaluate(expr, module)?;
-        self.error(value.to_string(), span, module.source.clone())
+        Self::error(value.to_string(), span, module.source.clone())
     }
 
     fn evaluate_tryhandle_expr(&mut self, tryhandle_expr: &TryHandleExpr, module: &Module) -> EvaluationResult {
@@ -578,14 +578,14 @@ impl Engine {
             Ok(func) => func,
             Err(_) => {
                 let span = definitions.iter().find(|(name, _)| name == "main").unwrap().1.span;
-                return engine.error("Symbol Main has to Be a Function", span, module.source.clone())
+                return Self::error("Symbol Main has to Be a Function", span, module.source.clone())
             },
         };
 
         if let Function::Standart(func) = main_func {
             if let Some(_) = func.clos {
                 let span = definitions.iter().find(|(name, _)| name == "main").unwrap().1.span;
-                return engine.error("Main Function cannot Capture Variables", span, module.source.clone())
+                return Self::error("Main Function cannot Capture Variables", span, module.source.clone())
             }
 
             let mut local_count = 0;
@@ -599,11 +599,11 @@ impl Engine {
                             .collect()
                     )));
                     if !engine.fits_pattern(&value, x, &mut local_count) {
-                        return engine.error("CLI Arguments Don't Have the Expected Pattern", x.span, module.source.clone());
+                        return Self::error("CLI Arguments Don't Have the Expected Pattern", x.span, module.source.clone());
                     }
                 }
                 [_, x, ..] => {
-                    return engine.error(format!("Main Function can have at most 1 Argument, instead provided {}", func.args.len()), x.span, module.source.clone());
+                    return Self::error(format!("Main Function can have at most 1 Argument, instead provided {}", func.args.len()), x.span, module.source.clone());
                 }
             }
 
@@ -619,7 +619,7 @@ impl Engine {
             }
         } else {
             let span = definitions.iter().find(|(name, _)| name == "main").unwrap().1.span;
-            engine.error(format!("Symbol Main has to Be a Standart Function not `{main_func}`"), span, module.source.clone())
+            Self::error(format!("Symbol Main has to Be a Standart Function not `{main_func}`"), span, module.source.clone())
         }
     }
 }
