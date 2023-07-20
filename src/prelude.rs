@@ -91,7 +91,7 @@ fn prelude() -> HashMap<String, Value> {
         }
 
         "<-" -> |values| {
-            let (left, right) = two_values!(values); 
+            let (left, right) = two_values!(values);
             Ok(Value::Function(Function::Partial(Box::new(left.as_function()?), Box::new(right.clone()))))
         }
         

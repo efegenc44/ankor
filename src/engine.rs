@@ -167,8 +167,18 @@ impl Engine {
                 Err(err) => self.error(err, span, module.source.clone()),
             },
             Function::Composed(left, right) => {
-                let first_pass = self.call_function(right, args, module, span, func_span)?;
-                self.call_function(left, vec![first_pass], module, span, func_span)
+                let first_pass = self.call_function(right, args, module, span, func_span).map_err(|mut exc| {
+                    if let Exception::Exception((err, _)) = &mut exc {
+                        err.msg = format!("At right function: {}", err.msg);
+                    }
+                    exc
+                })?;
+                self.call_function(left, vec![first_pass], module, span, func_span).map_err(|mut exc| {
+                    if let Exception::Exception((err, _)) = &mut exc {
+                        err.msg = format!("At left function: {}", err.msg);
+                    }
+                    exc
+                })
             },
             Function::Partial(left, right) => {
                 let args = {
