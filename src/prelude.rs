@@ -157,14 +157,16 @@ fn list() -> HashMap<String, Value> {
     env! {
         "get" -> |values| {
             let (list, index) = two_values!(values);
-            let list = list.as_list()?;
-            match index {
-                Value::Integer(Integer::Small(int)) => match list.borrow().get(*int as usize) {
-                    Some(value) => Ok(value.clone()),
-                    None => Err("Index out of bounds".to_string()),
-                },
-                Value::Integer(Integer::Big(_)) => Err("Cannot index using BigInteger".to_string()),
-                _ => Err("Index has to be Integer".to_string())
+
+            let index = match index {
+                Value::Integer(Integer::Small(int)) => *int,
+                Value::Integer(Integer::Big(bigint)) => bigint.try_into().map_err(|_| "Cannot index using BigInteger".to_string())?,
+                _ => return Err("Index has to be Integer".to_string())
+            };
+
+            match list.as_list()?.borrow().get(index as usize) {
+                Some(value) => Ok(value.clone()),
+                None => return Err("Index out of bounds".to_string()),
             }
         }
 
