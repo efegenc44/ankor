@@ -99,9 +99,9 @@ fn prelude() -> HashMap<String, Value> {
         "*" -> |values| binary!(values, *)
         "/" -> |values| binary!(values, /)
         "-" -> |values| match values {
-            [_]    => unary!(values, !),
+            [_]    => unary!(values, -),
             [_, _] => binary!(values, -),
-            _ => unreachable!()
+            _ => Err("Expected at least one value, at max two values for (-)".to_string())
         }
 
         "and" -> |values| binary!(values, &)
