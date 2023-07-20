@@ -34,42 +34,54 @@ impl Value {
     pub fn as_function(&self) -> Result<Function, String> {
         Ok(match self {
             Self::Function(func) => func.clone(),
-            // TOOD: Report type here
-            _ => return Err("Expected `Function`".to_string())
+            _ => return Err(format!("Expected `Function` instead found `{}`", self.type_name()))
         })
     }
 
     pub fn as_integer(&self) -> Result<Integer, String> {
         Ok(match self {
             Self::Integer(int) => int.clone(),
-            // TOOD: Report type here
-            _ => return Err("Expected `Integer`".to_string())
+            _ => return Err(format!("Expected `Integer` instead found `{}`", self.type_name()))
         })
     }
 
     pub fn as_bool(&self) -> Result<bool, String> {
         Ok(match self {
             Self::Bool(bool) => *bool,
-            // TOOD: Report type here
-            _ => return Err("Expected `Bool`".to_string())
+            _ => return Err(format!("Expected `Bool` instead found `{}`", self.type_name()))
         })
     }
 
     pub fn as_list(&self) -> Result<List, String> {
         Ok(match self {
             Self::List(list) => list.clone(),
-            // TOOD: Report type here
-            _ => return Err("Expected `List`".to_string())
+            _ => return Err(format!("Expected `List` instead found `{}`", self.type_name()))
         })
     }
 
     pub fn as_str(&self) -> Result<&str, String> {
         Ok(match self {
             Self::String(string) => string,
-            // TOOD: Report type here
-            _ => return Err("Expected `String`".to_string())
+            _ => return Err(format!("Expected `String` instead found `{}`", self.type_name()))
         })
     }
+
+    pub fn type_name(&self) -> &str {
+        use Value::*;
+
+        match self {
+            Integer(_) => "Integer",
+            Float(_) => "Float",
+            String(_) => "String",
+            Bool(_) => "Bool",
+            Function(_) => "Function",
+            Module(_) => "Module",
+            List(_) => "List",
+            Structure(_) => "Structure",
+            Range(_) => "Range",
+            Unit => "Unit",
+        }
+    } 
 }
 
 impl std::fmt::Display for Value {

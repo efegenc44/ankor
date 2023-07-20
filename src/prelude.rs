@@ -11,15 +11,13 @@ macro_rules! env {
 macro_rules! two_values {
     ($values:ident) => {{
         let [left, right] = $values else { 
-            return Err("Expected two value".to_string())
+            return Err(format!("Expected `2` Arguments, Instead Found `{}`", $values.len()))
         };
         (left, right)
     }};
 
     ($values:ident, $method:ident) => {{
-        let [left, right] = $values else { 
-            return Err("Expected two value".to_string())
-        };
+        let (left, right) = two_values!($values);
         (left.$method()?, right.$method()?)
     }};
 }
@@ -27,7 +25,7 @@ macro_rules! two_values {
 macro_rules! one_value {
     ($values:ident) => {{
         let [left] = $values else { 
-            return Err("Expected one value".to_string())
+            return Err(format!("Expected `1` Arguments, Instead Found `{}`", $values.len()))
         };
         left
     }};
@@ -38,7 +36,7 @@ macro_rules! unary {
         let operand = one_value!($values);
         match ($op operand) {
             Some(value) => Ok(value),
-            None => Err("Type Error at Unary Operation".to_string())
+            None => Err(format!("Type Error at Unary Operation: {}", operand.type_name()))
         }    
     }};
 }
@@ -48,7 +46,7 @@ macro_rules! binary {
         let (left, right) = two_values!($values);
         match (left $op right) {
             Some(value) => Ok(value),
-            None => Err("Type Error at Binary Operation".to_string())
+            None => Err(format!("Type Error at Binary Operation: {}, {}", left.type_name(), right.type_name()))
         }
     }};
 }
@@ -64,7 +62,7 @@ macro_rules! comparison {
                 $res => true,
                 _ => false
             })),
-            None => Err("Comparison of different types".to_string())
+            None => Err(format!("Comparison of different types: {}, {}", left.type_name(), right.type_name()))
         }
     }};
 }
@@ -126,7 +124,7 @@ fn prelude() -> HashMap<String, Value> {
                     // TODO: Proper float conversion
                     integer::Integer::Big(bigint) => bigint.to_string().parse().unwrap()
                 }),
-                _ => return Err("Value is not convertable to float".to_string())
+                value => return Err(format!("`{}` is not convertable to float", value.type_name()))
             })
         }
     
@@ -161,7 +159,7 @@ fn list() -> HashMap<String, Value> {
             let index = match index {
                 Value::Integer(Integer::Small(int)) => *int,
                 Value::Integer(Integer::Big(bigint)) => bigint.try_into().map_err(|_| "Cannot index using BigInteger".to_string())?,
-                _ => return Err("Index has to be Integer".to_string())
+                _ => return Err(format!("Index expected to be `Integer` found {}", index.type_name()))
             };
 
             match list.as_list()?.borrow().get(index as usize) {

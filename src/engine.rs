@@ -384,9 +384,9 @@ impl Engine {
     fn evaluate_access_expr(&mut self, access_expr: &AccessExpr, module: &Module) -> EvaluationResult {
         let AccessExpr { expr, name } = access_expr;
 
-        let (Value::Module(Module { map, .. }) | Value::Structure(map)) = self.evaluate(expr, module)? else {
-            // TODO: Report type here
-            return self.error("Field access is only available for `Module`s and `Structure`s", expr.span, module.source.clone())
+        let value = self.evaluate(expr, module)?;
+        let (Value::Module(Module { map, .. }) | Value::Structure(map)) = value else {
+            return self.error(format!("Field access is only available for `Module`s and `Structure`s, not for `{}`", value.type_name()), expr.span, module.source.clone())
         };
         
         let map = map.borrow();
@@ -417,8 +417,9 @@ impl Engine {
             Expr::Identifier(ident) => self.assign(ident, rvalue, module, lhs.span),
             Expr::Access(AccessExpr { expr, name }) => {
 
-                let (Value::Module(Module { map, .. }) | Value::Structure(map)) = self.evaluate(expr, module)? else {
-                    return self.error("Field access is only available for `Module`s and `Structure`s", expr.span, module.source.clone())
+                let value = self.evaluate(expr, module)?;
+                let (Value::Module(Module { map, .. }) | Value::Structure(map)) = value else {
+                    return self.error(format!("Field access is only available for `Module`s and `Structure`s, not for `{}`", value.type_name()), expr.span, module.source.clone())
                 }; 
 
                 let mut map = map.borrow_mut();
@@ -462,8 +463,7 @@ impl Engine {
         let mut iter: Box<dyn Iterator<Item = Value>> = match self.evaluate(expr, module)? {
             Value::Range(iter) => Box::new(iter),
             Value::List(list) => Box::new(list.borrow().clone().into_iter()),
-            // TODO: Report type here
-            not_iter => return self.error(format!("`{not_iter}` is not an Iterator"), expr.span, module.source.clone())
+            not_iter => return self.error(format!("`{}` is not an Iterator", not_iter.type_name()), expr.span, module.source.clone())
         };
     
         loop {
