@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc, cell::RefCell};
 
-use crate::value::{Value, self, ModuleValue};
+use crate::{value::{Value, self, ModuleValue}, value::{integer::{Integer, self}, range::Range}};
 
 macro_rules! env {
     ($( $name:literal -> $func:expr )*) => {
@@ -121,11 +121,34 @@ fn prelude() -> HashMap<String, Value> {
 
             Ok(match one_value!(values) {
                 Float(float) => Float(*float),
-                Integer(int) => Float(*int as value::Float),
-                // TODO: Proper float conversion
-                BigInteger(bigint) => Float(bigint.to_string().parse().unwrap()),
+                Integer(int) => Float(match int {
+                    integer::Integer::Small(small) => *small as value::Float,
+                    // TODO: Proper float conversion
+                    integer::Integer::Big(bigint) => bigint.to_string().parse().unwrap()
+                }),
                 _ => return Err("Value is not convertable to float".to_string())
             })
+        }
+    
+        "range" -> |values| {
+            Ok(Value::Range(match values {
+                [end] => Range {
+                    start: Integer::Small(0),
+                    end: end.as_integer()?,
+                    step: Integer::Small(1)
+                },
+                [start, end] => Range {
+                    start: start.as_integer()?,
+                    end: end.as_integer()?,
+                    step: Integer::Small(1)
+                },
+                [start, end, step] => Range {
+                    start: start.as_integer()?,
+                    end: end.as_integer()?,
+                    step: step.as_integer()?
+                },
+                _ => return Err("At least 1 argument expected".to_string())
+            }))
         }
     }
 }
@@ -136,12 +159,11 @@ fn list() -> HashMap<String, Value> {
             let (list, index) = two_values!(values);
             let list = list.as_list()?;
             match index {
-                Value::Integer(int) => match list.borrow().get(*int as usize) {
+                Value::Integer(Integer::Small(int)) => match list.borrow().get(*int as usize) {
                     Some(value) => Ok(value.clone()),
                     None => Err("Index out of bounds".to_string()),
                 },
-                // TODO: Big Integer list indexing
-                Value::BigInteger(_) => Err("Cannot index using BigInteger".to_string()),
+                Value::Integer(Integer::Big(_)) => Err("Cannot index using BigInteger".to_string()),
                 _ => Err("Index has to be Integer".to_string())
             }
         }

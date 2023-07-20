@@ -1,15 +1,17 @@
+pub mod integer;
+pub mod range;
+
 use std::{rc::Rc, collections::HashMap, cell::RefCell};
 
-use apnum::BigInt;
-
 use crate::{expr::{Expr, Pattern}, span::Spanned};
+
+use self::{integer::Integer, range::Range};
 
 pub type List = Rc<RefCell<Vec<Value>>>;
 pub type Native = fn(&[Value]) -> Result<Value, String>;
 pub type Function = Rc<FunctionValue>; 
 pub type Structure = Rc<RefCell<HashMap<String, Value>>>;
 pub type Float = f64;
-pub type Integer = i32;
 
 #[derive(Clone)]
 pub struct ModuleValue {
@@ -27,7 +29,6 @@ pub struct FunctionValue {
 #[derive(Clone)]
 pub enum Value {
     Integer(Integer),
-    BigInteger(BigInt),
     Float(Float),
     String(String),
     Bool(bool),
@@ -38,10 +39,19 @@ pub enum Value {
     Module(ModuleValue),
     List(List),
     Structure(Structure),
+    Range(Range),
     Unit
 }
 
 impl Value {
+    pub fn as_integer(&self) -> Result<Integer, String> {
+        Ok(match self {
+            Self::Integer(int) => int.clone(),
+            // TOOD: Report type here
+            _ => return Err("Expected `Integer`".to_string())
+        })
+    }
+
     pub fn as_bool(&self) -> Result<bool, String> {
         Ok(match self {
             Self::Bool(bool) => *bool,
@@ -73,7 +83,6 @@ impl std::fmt::Display for Value {
 
         match self {
             Integer(int) => write!(f, "{int}"),
-            BigInteger(bigint) => write!(f, "{bigint}"),
             Float(float) => write!(f, "{float}"),
             String(string) => write!(f, "{string}"),
             Bool(bool) => write!(f, "{bool}"),
@@ -114,6 +123,7 @@ impl std::fmt::Display for Value {
                 }
                 write!(f, " }}")
             }
+            Range(range) => write!(f, "{range}"),
             Unit => write!(f, "()"),
         }
     }
@@ -133,14 +143,12 @@ impl std::cmp::PartialEq for Value {
 
         match (self, other) {
             (Integer(lint), Integer(rint)) => lint == rint,
-            (BigInteger(lbigint), BigInteger(rbigint)) => lbigint == rbigint,
-            (BigInteger(bigint), Integer(int)) => bigint.eq_i32(*int),
-            (Integer(int), BigInteger(bigint)) => bigint.eq_i32(*int),
             (Float(lfloat), Float(rfloat)) => lfloat == rfloat,
             (String(lstring), String(rstring)) => lstring == rstring,
             (Bool(lbool), Bool(rbool)) => lbool == rbool,
             (List(llist), List(rlist)) => llist == rlist,
             (Structure(ls), Structure(rs)) => ls == rs,
+            (Range(lrange), Range(rrange)) => lrange == rrange,
             (Unit, Unit) => true,
             (Function(_), Function(_)) => false,
             (ComposedFunctions(..), ComposedFunctions(..)) => false,
@@ -158,9 +166,6 @@ impl std::cmp::PartialOrd for Value {
 
         Some(match (self, other) {
             (Integer(lint), Integer(rint)) => lint.cmp(rint),
-            (BigInteger(lbigint), BigInteger(rbigint)) => lbigint.cmp(rbigint),
-            (BigInteger(bigint), Integer(int)) => bigint.cmp_i32(*int),
-            (Integer(int), BigInteger(bigint)) => bigint.cmp_i32(*int).reverse(),
             (Float(lfloat), Float(rfloat)) => lfloat.total_cmp(rfloat),
             _ => return None
         })
@@ -174,13 +179,7 @@ impl std::ops::Add for &Value {
         use Value::*;
 
         Some(match (self, rhs) {
-            (Integer(lint), Integer(rint)) => match lint.checked_add(*rint) {
-                Some(int) => Integer(int),
-                None => BigInteger(BigInt::from(*lint) + *rint),
-            },
-            (BigInteger(lbigint), BigInteger(rbigint)) => BigInteger(lbigint + rbigint),
-            (BigInteger(bigint), Integer(int)) => BigInteger(bigint + *int),
-            (Integer(int), BigInteger(bigint)) => BigInteger(*int + bigint),
+            (Integer(lint), Integer(rint)) => Integer(lint + rint),
             (Float(lfloat), Float(rfloat)) => Float(lfloat + rfloat),
             _ => return None 
         })
@@ -194,13 +193,7 @@ impl std::ops::Sub for &Value {
         use Value::*;
 
         Some(match (self, rhs) {
-            (Integer(lint), Integer(rint)) => match lint.checked_sub(*rint) {
-                Some(int) => Integer(int),
-                None => BigInteger(BigInt::from(*lint) - *rint),
-            },
-            (BigInteger(lbigint), BigInteger(rbigint)) => BigInteger(lbigint - rbigint),
-            (BigInteger(bigint), Integer(int)) => BigInteger(bigint - *int),
-            (Integer(int), BigInteger(bigint)) => BigInteger(*int - bigint),
+            (Integer(lint), Integer(rint)) => Integer(lint - rint),
             (Float(lfloat), Float(rfloat)) => Float(lfloat - rfloat),
             _ => return None
         })
@@ -214,13 +207,7 @@ impl std::ops::Mul for &Value {
         use Value::*;
 
         Some(match (self, rhs) {
-            (Integer(lint), Integer(rint)) => match lint.checked_mul(*rint) {
-                Some(int) => Integer(int),
-                None => BigInteger(BigInt::from(*lint) * *rint),
-            },
-            (BigInteger(lbigint), BigInteger(rbigint)) => BigInteger(lbigint * rbigint),
-            (BigInteger(bigint), Integer(int)) => BigInteger(bigint * *int),
-            (Integer(int), BigInteger(bigint)) => BigInteger(*int * bigint),
+            (Integer(lint), Integer(rint)) => Integer(lint * rint),
             (Float(lfloat), Float(rfloat)) => Float(lfloat * rfloat),
             _ => return None
         })
@@ -234,13 +221,7 @@ impl std::ops::Div for &Value {
         use Value::*;
 
         Some(match (self, rhs) {
-            (Integer(lint), Integer(rint)) => match lint.checked_div(*rint) {
-                Some(int) => Integer(int),
-                None => BigInteger((BigInt::from(*lint) / *rint).0),
-            },
-            (BigInteger(lbigint), BigInteger(rbigint)) => BigInteger((lbigint / rbigint).0),
-            (BigInteger(bigint), Integer(int)) => BigInteger((bigint / *int).0),
-            (Integer(int), BigInteger(bigint)) => BigInteger((&BigInt::from(*int) / bigint).0),
+            (Integer(lint), Integer(rint)) => Integer(lint / rint),
             (Float(lfloat), Float(rfloat)) => Float(lfloat / rfloat),
             _ => return None
         })
@@ -281,7 +262,6 @@ impl std::ops::Neg for &Value {
 
         Some(match self {
             Integer(int) => Integer(-int),
-            BigInteger(bigint) => BigInteger(-bigint),
             Float(float) => Float(-float),
             _ => return None
         })

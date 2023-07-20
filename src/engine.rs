@@ -11,7 +11,7 @@ use crate::{
     },
     lexer::Lexer, parser::Parser,
     prelude::get_prelude,
-    value::{FunctionValue, Value, self, ModuleValue}, span::{Spanned, Span}, handle_error, reporter::Reporter, error::Error,
+    value::{FunctionValue, Value, self, ModuleValue, integer::Integer}, span::{Spanned, Span}, handle_error, reporter::Reporter, error::Error,
 };
 
 pub enum Exception {
@@ -85,10 +85,10 @@ impl Engine {
         } 
     }
 
-    fn parse_integer(number: &str) -> Value {
+    fn parse_integer(number: &str) -> Integer {
         match number.parse() {
-            Ok(number) => Value::Integer(number),
-            Err(_) => Value::BigInteger(BigInt::try_from(number).unwrap()),
+            Ok(number) => Integer::Small(number),
+            Err(_) => Integer::Big(BigInt::try_from(number).unwrap()),
         }
     }
 
@@ -96,7 +96,7 @@ impl Engine {
         use Expr::*;
         
         match &expr.data {
-            Integer(int) => Ok(Self::parse_integer(int)),
+            Integer(int) => Ok(Value::Integer(Self::parse_integer(int))),
             Float(float) => Ok(Value::Float(float.parse().unwrap())),
             String(string) => Ok(Value::String(string.clone())),
             Bool(bool) => Ok(Value::Bool(*bool)),
@@ -258,8 +258,8 @@ impl Engine {
     fn fits_pattern(&mut self, value: &Value, pattern: &Spanned<Pattern>, local_count: &mut usize) -> bool {
         match (value, &pattern.data) {
             (Value::String(lstring), Pattern::String(rstring)) => lstring == rstring,
-            (Value::Integer(_) | Value::BigInteger(_), Pattern::NonNegativeInteger(rint)) => value == &Self::parse_integer(rint),
-            (Value::Integer(_) | Value::BigInteger(_), Pattern::NegativeInteger(rint)) => value == &(-&Self::parse_integer(rint)).unwrap(),
+            (Value::Integer(int), Pattern::NonNegativeInteger(rint)) => int == &Self::parse_integer(rint),
+            (Value::Integer(int), Pattern::NegativeInteger(rint)) => int == &(-&Self::parse_integer(rint)),
             (Value::Float(lfloat), Pattern::NonNegativeFloat(rfloat)) => lfloat == &rfloat.parse::<value::Float>().unwrap(),
             (Value::Float(lfloat), Pattern::NegativeFloat(rfloat)) => lfloat == &-rfloat.parse::<value::Float>().unwrap(),
             (Value::Bool(lbool), Pattern::Bool(rbool)) => lbool == rbool,
@@ -449,7 +449,7 @@ impl Engine {
         let ForExpr { patt, expr, body } = for_expr;
 
         let mut iter: Box<dyn Iterator<Item = Value>> = match self.evaluate(expr, module)? {
-            Value::Integer(int) => Box::new((0..int).map(Value::Integer)),
+            Value::Range(iter) => Box::new(iter),
             Value::List(list) => Box::new(list.borrow().clone().into_iter()),
             // TODO: Report type here
             not_iter => return self.error(format!("`{not_iter}` is not an Iterator"), expr.span, module.source.clone())
