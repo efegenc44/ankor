@@ -54,9 +54,18 @@ macro_rules! binary {
 }
 
 macro_rules! comparison {
-    ($values:ident, $op:tt) => {{
+    ($values:ident, $res:pat) => {{
+        use std::cmp::Ordering::*;
+
         let (left, right) = two_values!($values);
-        Ok(Value::Bool(left $op right))
+
+        match left.partial_cmp(right) {
+            Some(result) => Ok(Value::Bool(match result {
+                $res => true,
+                _ => false
+            })),
+            None => Err("Comparison of different types".to_string())
+        }
     }};
 }
 
@@ -100,12 +109,12 @@ fn prelude() -> HashMap<String, Value> {
 
         "!" -> |values| unary!(values, !)
 
-        "<"  -> |values| comparison!(values, <)
-        "<=" -> |values| comparison!(values, <=)
-        ">"  -> |values| comparison!(values, >)
-        ">=" -> |values| comparison!(values, >=)
-        "==" -> |values| comparison!(values, ==)
-        "!=" -> |values| comparison!(values, ==)
+        "<"  -> |values| comparison!(values, Less)
+        "<=" -> |values| comparison!(values, Less | Equal)
+        ">"  -> |values| comparison!(values, Greater)
+        ">=" -> |values| comparison!(values, Greater | Equal)
+        "==" -> |values| comparison!(values, Equal)
+        "!=" -> |values| comparison!(values, Less | Greater)
 
         "float" -> |values| {
             use Value::*;
