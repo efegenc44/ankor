@@ -1,10 +1,10 @@
 use std::{collections::HashMap, rc::Rc, cell::RefCell};
 
-use crate::{value::{Value, self, ModuleValue}, value::{integer::{Integer, self}, range::Range}};
+use crate::{value::{Value, self, ModuleValue}, value::{integer::{Integer, self}, range::Range, function::Function}};
 
 macro_rules! env {
     ($( $name:literal -> $func:expr )*) => {
-        HashMap::from([$((String::from($name), Value::Native($func))),*])           
+        HashMap::from([$((String::from($name), Value::Function(Function::Native($func)))),*])
     };
 }
 
@@ -86,13 +86,13 @@ fn prelude() -> HashMap<String, Value> {
         }
 
         "o" -> |values| {
-            let (left, right) = two_values!(values); 
-            Ok(Value::ComposedFunctions(Box::new(left.clone()), Box::new(right.clone())))
+            let (left, right) = two_values!(values, as_function); 
+            Ok(Value::Function(Function::Composed(Box::new(left.clone()), Box::new(right.clone()))))
         }
 
         "<-" -> |values| {
             let (left, right) = two_values!(values); 
-            Ok(Value::ParitalFunction(Box::new(left.clone()), Box::new(right.clone())))
+            Ok(Value::Function(Function::Partial(Box::new(left.as_function()?), Box::new(right.clone()))))
         }
         
         "+" -> |values| binary!(values, +)

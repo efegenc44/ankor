@@ -1,15 +1,12 @@
 pub mod integer;
 pub mod range;
+pub mod function;
 
 use std::{rc::Rc, collections::HashMap, cell::RefCell};
 
-use crate::{expr::{Expr, Pattern}, span::Spanned};
-
-use self::{integer::Integer, range::Range};
+use self::{integer::Integer, range::Range, function::Function};
 
 pub type List = Rc<RefCell<Vec<Value>>>;
-pub type Native = fn(&[Value]) -> Result<Value, String>;
-pub type Function = Rc<FunctionValue>; 
 pub type Structure = Rc<RefCell<HashMap<String, Value>>>;
 pub type Float = f64;
 
@@ -19,13 +16,6 @@ pub struct ModuleValue {
     pub map: Rc<RefCell<HashMap<String, Value>>>
 }
 
-pub struct FunctionValue {
-    pub args: Vec<Spanned<Pattern>>,
-    pub expr: Box<Spanned<Expr>>,
-    pub clos: Option<Vec<(String, Value)>>,
-    pub modl: ModuleValue
-}
-
 #[derive(Clone)]
 pub enum Value {
     Integer(Integer),
@@ -33,9 +23,6 @@ pub enum Value {
     String(String),
     Bool(bool),
     Function(Function),
-    ComposedFunctions(Box<Value>, Box<Value>),
-    ParitalFunction(Box<Value>, Box<Value>),
-    Native(Native),
     Module(ModuleValue),
     List(List),
     Structure(Structure),
@@ -44,6 +31,14 @@ pub enum Value {
 }
 
 impl Value {
+    pub fn as_function(&self) -> Result<Function, String> {
+        Ok(match self {
+            Self::Function(func) => func.clone(),
+            // TOOD: Report type here
+            _ => return Err("Expected `Function`".to_string())
+        })
+    }
+
     pub fn as_integer(&self) -> Result<Integer, String> {
         Ok(match self {
             Self::Integer(int) => int.clone(),
@@ -86,10 +81,7 @@ impl std::fmt::Display for Value {
             Float(float) => write!(f, "{float}"),
             String(string) => write!(f, "{string}"),
             Bool(bool) => write!(f, "{bool}"),
-            Function(_) => write!(f, "<function>"),
-            ComposedFunctions(..) => write!(f, "<function>"),
-            ParitalFunction(..) => write!(f, "<function>"),
-            Native(_) => write!(f, "<native function>"),
+            Function(func) => write!(f, "{func}"),
             Module(_) => write!(f, "<module>"),
             List(list) => match &list.borrow()[..] {
                 [] => write!(f, "[]"),
@@ -151,9 +143,6 @@ impl std::cmp::PartialEq for Value {
             (Range(lrange), Range(rrange)) => lrange == rrange,
             (Unit, Unit) => true,
             (Function(_), Function(_)) => false,
-            (ComposedFunctions(..), ComposedFunctions(..)) => false,
-            (ParitalFunction(..), ParitalFunction(..)) => false,
-            (Native(_), Native(_)) => false,
             (Module(_), Module(_)) => false,
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }

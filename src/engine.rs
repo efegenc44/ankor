@@ -11,7 +11,7 @@ use crate::{
     },
     lexer::Lexer, parser::Parser,
     prelude::get_prelude,
-    value::{FunctionValue, Value, self, ModuleValue, integer::Integer}, span::{Spanned, Span}, handle_error, reporter::Reporter, error::Error,
+    value::{Value, self, ModuleValue, integer::Integer, function::{Function, FunctionValue}}, span::{Spanned, Span}, handle_error, reporter::Reporter, error::Error,
 };
 
 pub enum Exception {
@@ -157,20 +157,20 @@ impl Engine {
             clos,
         };
         
-        Ok(Value::Function(Rc::new(function_value)))
+        Ok(Value::Function(Function::Standart(Rc::new(function_value))))
     }
 
-    fn call_function(&mut self, func_value: &Value, args: Vec<Value>, module: &ModuleValue, span: Span, func_span: Span) -> EvaluationResult {
+    fn call_function(&mut self, func_value: &Function, args: Vec<Value>, module: &ModuleValue, span: Span, func_span: Span) -> EvaluationResult {
         match func_value {
-            Value::Native(func) => match func(&args) {
+            Function::Native(func) => match func(&args) {
                 Ok(value) => Ok(value),
                 Err(err) => self.error(err, span, module.source.clone()),
             },
-            Value::ComposedFunctions(left, right) => {
+            Function::Composed(left, right) => {
                 let first_pass = self.call_function(right, args, module, span, func_span)?;
                 self.call_function(left, vec![first_pass], module, span, func_span)
             },
-            Value::ParitalFunction(left, right) => {
+            Function::Partial(left, right) => {
                 let args = {
                     let mut argsx = vec![*right.clone()];
                     argsx.extend(args);
@@ -178,7 +178,7 @@ impl Engine {
                 };
                 self.call_function(left, args, module, span, func_span)
             },
-            Value::Function(func) => {
+            Function::Standart(func) => {
                 if args.len() != func.args.len() {
                     return self.error(format!("Expected `{}` Arguments, Instead Found `{}`", func.args.len(), args.len()), span, module.source.clone())
                 }
@@ -214,9 +214,7 @@ impl Engine {
                         _ => Err(exc)
                     },
                 }
-            },
-            // TODO: Report type here
-            wrong_type => self.error(format!("`{wrong_type}` is not Function"), func_span, module.source.clone())
+            }
         }
     }
 
@@ -226,7 +224,10 @@ impl Engine {
         let arg_values: Result<Vec<_>, _> = args.iter().map(|expr| self.evaluate(expr, module)).collect();
         let arg_values = arg_values?; 
 
-        let func_value = self.evaluate(func, module)?;
+        let func_value = match self.evaluate(func, module)?.as_function() {
+            Ok(func) => func,
+            Err(msg) => return self.error(msg, span, module.source.clone()),
+        };
 
         self.call_function(&func_value, arg_values, module, span, func.span)
     }
@@ -563,55 +564,52 @@ impl Engine {
             }
         };
 
-        let result = match main {
-            Value::Function(func) => {
-                let clos_count = func.clos
-                    .as_ref()
-                    .map(|clos| {
-                        for (arg, value) in clos {
-                            engine.define_local(arg.clone(), value.clone());
-                        }
-                        clos.len()
-                    })
-                    .unwrap_or(0);
-               
-                let mut local_count = 0;
-                match &func.args[..] {
-                    [] => (),
-                    [x] => {
-                        let value = Value::List(Rc::new(RefCell::new(
-                            cli_args
-                                .iter()
-                                .map(|arg| Value::String(arg.clone()))
-                                .collect()
-                        )));
-                        if !engine.fits_pattern(&value, x, &mut local_count) {
-                            return engine.error("CLI Arguments Don't Have the Expected Pattern", x.span, module.source.clone());
-                        }
-                    }
-                    [_, x, ..] => {
-                        return engine.error(format!("Main Function can have at most 1 Argument, instead provided {}", func.args.len()), x.span, module.source.clone());
-                    }
-                }
-
-                let result = engine.evaluate(&func.expr, &module);
-                engine.remove_local(local_count + clos_count);
-
-                match result {
-                    Ok(value) => Ok(value),
-                    Err(exc) => match exc {
-                        Exception::Return(value) => Ok(value),
-                        _ => Err(exc)
-                    },
-                }
-            },
-    
-            _ => {
+        let main_func = match main.as_function() {
+            Ok(func) => func,
+            Err(_) => {
                 let span = definitions.iter().find(|(name, _)| name == "main").unwrap().1.span;
-                engine.error("Symbol Main has to Be a Function", span, module.source.clone())
-            }
+                return engine.error("Symbol Main has to Be a Function", span, module.source.clone())
+            },
         };
 
-        result
+        if let Function::Standart(func) = main_func {
+            if let Some(_) = func.clos {
+                let span = definitions.iter().find(|(name, _)| name == "main").unwrap().1.span;
+                return engine.error("Main Function cannot Capture Variables", span, module.source.clone())
+            }
+
+            let mut local_count = 0;
+            match &func.args[..] {
+                [] => (),
+                [x] => {
+                    let value = Value::List(Rc::new(RefCell::new(
+                        cli_args
+                            .iter()
+                            .map(|arg| Value::String(arg.clone()))
+                            .collect()
+                    )));
+                    if !engine.fits_pattern(&value, x, &mut local_count) {
+                        return engine.error("CLI Arguments Don't Have the Expected Pattern", x.span, module.source.clone());
+                    }
+                }
+                [_, x, ..] => {
+                    return engine.error(format!("Main Function can have at most 1 Argument, instead provided {}", func.args.len()), x.span, module.source.clone());
+                }
+            }
+
+            let result = engine.evaluate(&func.expr, &module);
+            engine.remove_local(local_count);
+
+            match result {
+                Ok(value) => Ok(value),
+                Err(exc) => match exc {
+                    Exception::Return(value) => Ok(value),
+                    _ => Err(exc)
+                },
+            }
+        } else {
+            let span = definitions.iter().find(|(name, _)| name == "main").unwrap().1.span;
+            engine.error(format!("Symbol Main has to Be a Standart Function not `{main_func}`"), span, module.source.clone())
+        }
     }
 }
