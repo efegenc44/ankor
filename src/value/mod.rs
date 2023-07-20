@@ -11,7 +11,7 @@ pub type Structure = Rc<RefCell<HashMap<String, Value>>>;
 pub type Float = f64;
 
 #[derive(Clone)]
-pub struct ModuleValue {
+pub struct Module {
     pub source: String,
     pub map: Rc<RefCell<HashMap<String, Value>>>
 }
@@ -23,7 +23,7 @@ pub enum Value {
     String(String),
     Bool(bool),
     Function(Function),
-    Module(ModuleValue),
+    Module(Module),
     List(List),
     Structure(Structure),
     Range(Range),

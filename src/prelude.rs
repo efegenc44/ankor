@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc, cell::RefCell};
 
-use crate::{value::{Value, self, ModuleValue}, value::{integer::{Integer, self}, range::Range, function::Function}};
+use crate::{value::{Value, self, Module}, value::{integer::{Integer, self}, range::Range, function::Function}};
 
 macro_rules! env {
     ($( $name:literal -> $func:expr )*) => {
@@ -212,12 +212,12 @@ fn string() -> HashMap<String, Value> {
     }
 }
 
-pub fn get_prelude(source: &str) -> ModuleValue {
+pub fn get_prelude(source: &str) -> Module {
     let mut prelude = prelude();
     
     prelude.insert(
         "List".to_string(), 
-        Value::Module(ModuleValue {
+        Value::Module(Module {
             source: source.into(),
             map: Rc::new(RefCell::new(list()))
         })
@@ -225,13 +225,13 @@ pub fn get_prelude(source: &str) -> ModuleValue {
 
     prelude.insert(
         "String".to_string(), 
-        Value::Module(ModuleValue {
+        Value::Module(Module {
             source: source.into(),
             map: Rc::new(RefCell::new(string()))
         })
     );
 
-    ModuleValue {
+    Module {
         source: source.into(),
         map: Rc::new(RefCell::new(prelude))
     }

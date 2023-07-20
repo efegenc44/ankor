@@ -11,7 +11,7 @@ use crate::{
     },
     lexer::Lexer, parser::Parser,
     prelude::get_prelude,
-    value::{Value, self, ModuleValue, integer::Integer, function::{Function, FunctionValue}}, span::{Spanned, Span}, handle_error, reporter::Reporter, error::Error,
+    value::{Value, self, Module, integer::Integer, function::{Function, FunctionValue}}, span::{Spanned, Span}, handle_error, reporter::Reporter, error::Error,
 };
 
 pub enum Exception {
@@ -59,7 +59,7 @@ impl Engine {
         )))
     }
 
-    fn resolve_identifier(&mut self, ident: &str, module: &ModuleValue, span: Span) -> EvaluationResult {
+    fn resolve_identifier(&mut self, ident: &str, module: &Module, span: Span) -> EvaluationResult {
         if let Some((_, value)) = self.locals.iter().rev().find(|bind| bind.0 == ident) {
             return Ok(value.clone());
         }
@@ -70,7 +70,7 @@ impl Engine {
         }
     }
 
-    fn assign(&mut self, ident: &str, value: Value, module: &ModuleValue, span: Span) -> EvaluationResult {
+    fn assign(&mut self, ident: &str, value: Value, module: &Module, span: Span) -> EvaluationResult {
         if let Some((_, target)) = self.locals.iter_mut().rev().find(|bind| bind.0 == ident) {
             *target = value;
             return Ok(Value::Unit)
@@ -92,7 +92,7 @@ impl Engine {
         }
     }
 
-    pub fn evaluate(&mut self, expr: &Spanned<Expr>, module: &ModuleValue) -> EvaluationResult {
+    pub fn evaluate(&mut self, expr: &Spanned<Expr>, module: &Module) -> EvaluationResult {
         use Expr::*;
         
         match &expr.data {
@@ -124,7 +124,7 @@ impl Engine {
         }
     }
 
-    fn evaluate_let_expr(&mut self, let_expr: &LetExpr, module: &ModuleValue) -> EvaluationResult {
+    fn evaluate_let_expr(&mut self, let_expr: &LetExpr, module: &Module) -> EvaluationResult {
         let LetExpr { patt, vexp, expr } = let_expr;
 
         let value = self.evaluate(vexp, module)?;
@@ -138,7 +138,7 @@ impl Engine {
         Ok(result?)
     }
 
-    fn evaluate_function_expr(&mut self, function_expr: &FunctionExpr, module: &ModuleValue) -> EvaluationResult {
+    fn evaluate_function_expr(&mut self, function_expr: &FunctionExpr, module: &Module) -> EvaluationResult {
         let clos = if let Some(caps) = &function_expr.clos {
             let mut clos = vec![];
             for ident in caps {
@@ -160,7 +160,7 @@ impl Engine {
         Ok(Value::Function(Function::Standart(Rc::new(function_value))))
     }
 
-    fn call_function(&mut self, func_value: &Function, args: Vec<Value>, module: &ModuleValue, span: Span, func_span: Span) -> EvaluationResult {
+    fn call_function(&mut self, func_value: &Function, args: Vec<Value>, module: &Module, span: Span, func_span: Span) -> EvaluationResult {
         match func_value {
             Function::Native(func) => match func(&args) {
                 Ok(value) => Ok(value),
@@ -218,7 +218,7 @@ impl Engine {
         }
     }
 
-    fn evaluate_application_expr(&mut self, application_expr: &ApplicationExpr, module: &ModuleValue, span: Span) -> EvaluationResult {
+    fn evaluate_application_expr(&mut self, application_expr: &ApplicationExpr, module: &Module, span: Span) -> EvaluationResult {
         let ApplicationExpr { func, args } = application_expr;
 
         let arg_values: Result<Vec<_>, _> = args.iter().map(|expr| self.evaluate(expr, module)).collect();
@@ -232,14 +232,14 @@ impl Engine {
         self.call_function(&func_value, arg_values, module, span, func.span)
     }
 
-    fn evaluate_sequence_expr(&mut self, sequnce_expr: &SequenceExpr, module: &ModuleValue) -> EvaluationResult {
+    fn evaluate_sequence_expr(&mut self, sequnce_expr: &SequenceExpr, module: &Module) -> EvaluationResult {
         let SequenceExpr { lhs, rhs } = sequnce_expr;
 
         self.evaluate(lhs, module)?;
         self.evaluate(rhs, module)
     }
 
-    fn evaluate_match_expr(&mut self, match_expr: &MatchExpr, module: &ModuleValue, span: Span) -> EvaluationResult {
+    fn evaluate_match_expr(&mut self, match_expr: &MatchExpr, module: &Module, span: Span) -> EvaluationResult {
         let MatchExpr { expr, arms } = match_expr;
 
         let value = self.evaluate(expr, module)?;
@@ -351,7 +351,7 @@ impl Engine {
         }
     } 
 
-    fn evaluate_import_expr(&mut self, import_expr: &ImportExpr, module: &ModuleValue, span: Span) -> EvaluationResult {
+    fn evaluate_import_expr(&mut self, import_expr: &ImportExpr, module: &Module, span: Span) -> EvaluationResult {
         let ImportExpr { parts } = import_expr;
     
         let file_path = parts.join("/") + ".ank";
@@ -365,16 +365,16 @@ impl Engine {
         Ok(Value::Module(self.evaluate_module(&file_path, &astree)?))
     }
 
-    fn evaluate_list_expr(&mut self, list_expr: &ListExpr, module: &ModuleValue) -> EvaluationResult {
+    fn evaluate_list_expr(&mut self, list_expr: &ListExpr, module: &Module) -> EvaluationResult {
         let ListExpr { exprs } = list_expr;
 
         Ok(Value::List(Rc::new(RefCell::new(exprs.iter().map(|expr| self.evaluate(expr, module)).collect::<Result<Vec<_>, _>>()?))))
     }
 
-    fn evaluate_access_expr(&mut self, access_expr: &AccessExpr, module: &ModuleValue) -> EvaluationResult {
+    fn evaluate_access_expr(&mut self, access_expr: &AccessExpr, module: &Module) -> EvaluationResult {
         let AccessExpr { expr, name } = access_expr;
 
-        let (Value::Module(ModuleValue { map, .. }) | Value::Structure(map)) = self.evaluate(expr, module)? else {
+        let (Value::Module(Module { map, .. }) | Value::Structure(map)) = self.evaluate(expr, module)? else {
             // TODO: Report type here
             return self.error("Field access is only available for `Module`s and `Structure`s", expr.span, module.source.clone())
         };
@@ -386,7 +386,7 @@ impl Engine {
         }
     }
 
-    fn evaluate_structure_expr(&mut self, structure_expr: &StructureExpr, module: &ModuleValue) -> EvaluationResult {
+    fn evaluate_structure_expr(&mut self, structure_expr: &StructureExpr, module: &Module) -> EvaluationResult {
         let StructureExpr { fields } = structure_expr;
 
         let mut structure = HashMap::new();
@@ -398,7 +398,7 @@ impl Engine {
     }
 
 
-    fn evaluate_assignment_expr(&mut self, assignment_expr: &AssignmentExpr, module: &ModuleValue) -> EvaluationResult {
+    fn evaluate_assignment_expr(&mut self, assignment_expr: &AssignmentExpr, module: &Module) -> EvaluationResult {
         let AssignmentExpr { lhs, rhs } = assignment_expr;
 
         let rvalue = self.evaluate(rhs, module)?;
@@ -407,7 +407,7 @@ impl Engine {
             Expr::Identifier(ident) => self.assign(ident, rvalue, module, lhs.span),
             Expr::Access(AccessExpr { expr, name }) => {
 
-                let (Value::Module(ModuleValue { map, .. }) | Value::Structure(map)) = self.evaluate(expr, module)? else {
+                let (Value::Module(Module { map, .. }) | Value::Structure(map)) = self.evaluate(expr, module)? else {
                     return self.error("Field access is only available for `Module`s and `Structure`s", expr.span, module.source.clone())
                 }; 
 
@@ -424,7 +424,7 @@ impl Engine {
         }
     }
 
-    fn evaluate_while_expr(&mut self, while_expr: &WhileExpr, module: &ModuleValue) -> EvaluationResult {
+    fn evaluate_while_expr(&mut self, while_expr: &WhileExpr, module: &Module) -> EvaluationResult {
         let WhileExpr { cond, body } = while_expr;
 
         loop {
@@ -446,7 +446,7 @@ impl Engine {
 
     }
 
-    fn evaluate_for_expr(&mut self, for_expr: &ForExpr, module: &ModuleValue) -> EvaluationResult {
+    fn evaluate_for_expr(&mut self, for_expr: &ForExpr, module: &Module) -> EvaluationResult {
         let ForExpr { patt, expr, body } = for_expr;
 
         let mut iter: Box<dyn Iterator<Item = Value>> = match self.evaluate(expr, module)? {
@@ -480,7 +480,7 @@ impl Engine {
         }
     }
 
-    fn evaluate_if_expr(&mut self, if_expr: &IfExpr, module: &ModuleValue) -> EvaluationResult {
+    fn evaluate_if_expr(&mut self, if_expr: &IfExpr, module: &Module) -> EvaluationResult {
         let IfExpr { cond, truu, fals } = if_expr;
     
         match self.evaluate(cond, module)?.as_bool() {
@@ -495,7 +495,7 @@ impl Engine {
         }
     }
 
-    fn evaluate_return_expr(&mut self, return_expr: &ReturnExpr, module: &ModuleValue) -> EvaluationResult {
+    fn evaluate_return_expr(&mut self, return_expr: &ReturnExpr, module: &Module) -> EvaluationResult {
         let ReturnExpr { expr } = return_expr;
 
         let value = self.evaluate(expr, module)?;
@@ -503,7 +503,7 @@ impl Engine {
     }
 
 
-    fn evaluate_break_expr(&mut self, break_expr: &BreakExpr, module: &ModuleValue) -> EvaluationResult {
+    fn evaluate_break_expr(&mut self, break_expr: &BreakExpr, module: &Module) -> EvaluationResult {
         let BreakExpr { expr } = break_expr;
 
         let value = self.evaluate(expr, module)?;
@@ -514,14 +514,14 @@ impl Engine {
         Err(Exception::Continue)
     }
 
-    fn evaluate_raise_expr(&mut self, raise_expr: &RaiseExpr, module: &ModuleValue, span: Span) -> EvaluationResult {
+    fn evaluate_raise_expr(&mut self, raise_expr: &RaiseExpr, module: &Module, span: Span) -> EvaluationResult {
         let RaiseExpr { expr } = raise_expr;
 
         let value = self.evaluate(expr, module)?;
         self.error(value.to_string(), span, module.source.clone())
     }
 
-    fn evaluate_tryhandle_expr(&mut self, tryhandle_expr: &TryHandleExpr, module: &ModuleValue) -> EvaluationResult {
+    fn evaluate_tryhandle_expr(&mut self, tryhandle_expr: &TryHandleExpr, module: &Module) -> EvaluationResult {
         let TryHandleExpr { expr, hndl } = tryhandle_expr;
 
         match self.evaluate(expr, module) {
@@ -533,7 +533,7 @@ impl Engine {
         }
     }
 
-    fn evaluate_module_expr(&mut self, module_expr: &ModuleExpr, module: &ModuleValue) -> EvaluationResult {
+    fn evaluate_module_expr(&mut self, module_expr: &ModuleExpr, module: &Module) -> EvaluationResult {
         let ModuleExpr { definitions } = module_expr;
         
         let module = self.evaluate_module(&module.source, definitions)?;
@@ -541,7 +541,7 @@ impl Engine {
         Ok(Value::Module(module))
     }
 
-    pub fn evaluate_module(&mut self, source: &str, definitions: &Vec<(String, Spanned<Expr>)>) -> Result<ModuleValue, Exception> {
+    pub fn evaluate_module(&mut self, source: &str, definitions: &Vec<(String, Spanned<Expr>)>) -> Result<Module, Exception> {
         let mut engine = Self::new(); 
         let module = get_prelude(source);
         for (name, expr) in definitions {

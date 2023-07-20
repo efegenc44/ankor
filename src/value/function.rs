@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{expr::{Pattern, Expr}, span::Spanned};
 
-use super::{Value, ModuleValue};
+use super::{Value, Module};
 
 pub type Native = fn(&[Value]) -> Result<Value, String>;
 
@@ -11,7 +11,7 @@ pub struct FunctionValue {
     pub args: Vec<Spanned<Pattern>>,
     pub expr: Box<Spanned<Expr>>,
     pub clos: Option<Vec<(String, Value)>>,
-    pub modl: ModuleValue
+    pub modl: Module
 }
 
 #[derive(Clone)]
