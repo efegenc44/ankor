@@ -1,0 +1,21 @@
+fac_match = def(n) => 
+    match n
+    | 0 => 1
+    | n => fac_match(n - 1) * n
+
+fac_iter = def(n) => 
+    if n == 0 then
+        1
+    else
+
+    let acc = 1 in
+
+    (for i in range(2, n+1) do
+        acc = acc * i
+    );
+    # FIX: wo parens, it's a parse error
+    (acc)
+
+main = def() =>
+    println(fac_match(25));
+    println(fac_iter(25))

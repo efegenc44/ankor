@@ -111,7 +111,7 @@ fn prelude() -> HashMap<String, Value> {
         }
 
         "and" -> |values| binary!(values, &)
-        "or"  -> |values| binary!(values, -)
+        "or"  -> |values| binary!(values, |)
 
         "!" -> |values| unary!(values, !)
 

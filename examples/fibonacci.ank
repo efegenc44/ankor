@@ -1,0 +1,31 @@
+fib_match = def(n) =>
+    match n
+    | 0 or 1 => 1
+    | n => fib_match(n - 1) + fib_match(n - 2)
+
+fib_if = def(n) =>
+    if n == 0 or n == 1 then
+        1
+    else
+        fib_if(n - 1) + fib_if(n - 2)
+
+fib_iter = def(n) =>
+    if n == 0 or n == 1 then
+        1
+    else
+
+    let l = [1, 1] in
+    
+    (for _ in range(2, n+1) do
+        let s = List.get(l, 1) in
+        
+        List.set(l, 1, List.get(l, 0) + List.get(l, 1));
+        List.set(l, 0, s)
+    );
+
+    List.get(l, 1)
+
+main = def() =>
+    println(fib_match(25));
+    println(fib_if(25));
+    println(fib_iter(25))

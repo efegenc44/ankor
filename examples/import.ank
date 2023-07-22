@@ -1,0 +1,8 @@
+Vector2 = (import examples.Vector2).Vector2 
+
+main = def() =>
+    let v1 = Vector2.New(1, 2) in
+    let v2 = Vector2.New(5, 6) in
+
+    let { x: x_comp, y: 8 } = Vector2.Add(v1, v2) in
+        println(x_comp)
