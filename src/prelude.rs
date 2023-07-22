@@ -8,6 +8,20 @@ macro_rules! env {
     };
 }
 
+macro_rules! three_values {
+    ($values:ident) => {{
+        let [first, second, third] = $values else {
+            return Err(format!("Expected `3` Arguments, Instead Found `{}`", $values.len()))
+        };
+        (first, second, third)
+    }};
+
+    ($values:ident, $method:ident) => {{
+        let (first, second, third) = three_values!($values);
+        (first.$method()?, second.$method()?, third.$method()?)
+    }};
+}
+
 macro_rules! two_values {
     ($values:ident) => {{
         let [left, right] = $values else { 
@@ -160,6 +174,23 @@ fn list() -> HashMap<String, Value> {
                 Some(value) => Ok(value.clone()),
                 None => return Err("Index out of bounds".to_string()),
             }
+        }
+
+        "set" -> |values| {
+            let (list, index, value) = three_values!(values);
+
+            let index = match index {
+                Value::Integer(Integer::Small(int)) => *int,
+                Value::Integer(Integer::Big(bigint)) => bigint.try_into().map_err(|_| "Cannot index using BigInteger".to_string())?,
+                _ => return Err(format!("Index expected to be `Integer` found {}", index.type_name()))
+            };
+
+            match list.as_list()?.borrow_mut().get_mut(index as usize) {
+                Some(lvalue) => *lvalue = value.clone(),
+                None => return Err("Index out of bounds".to_string()),
+            };
+
+            Ok(Value::Unit)
         }
 
         "push" -> |values| {
