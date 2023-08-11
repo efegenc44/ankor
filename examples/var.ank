@@ -1,0 +1,9 @@
+main = def() =>
+    let y = 10 in
+    let add_dyn = def(x)     => x + y in
+    let add_clo = def(x) |y| => x + y in
+        println(add_clo(9)); # 19
+        println(add_dyn(9)); # 19
+        let y = 20 in
+        println(add_clo(9)); # 19
+        println(add_dyn(9)); # 29

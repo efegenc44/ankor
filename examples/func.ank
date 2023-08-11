@@ -1,0 +1,3 @@
+main = def() =>
+    let add_n_mul_by_5 = ((*) <- 5) o (+) in
+        println(add_n_mul_by_5(9, 6))

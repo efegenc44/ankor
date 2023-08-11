@@ -61,7 +61,7 @@ impl Iterator for Lexer {
                     self.next()
                 }
                 '#' => {
-                    while self.current_char() != &'\n' {
+                    while self.current_char() != &'\n' && self.current_char() != &'\0' {
                         self.advance();
                     }
                     self.next()

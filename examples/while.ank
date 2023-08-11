@@ -1,0 +1,6 @@
+main = def() =>
+
+    let i = 0 in
+    while i < 10 do
+        println(i);
+        i = i + 1
